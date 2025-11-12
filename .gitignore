@@ -1,0 +1,55 @@
+# Node
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# macOS
+.DS_Store
+
+# Android
+android/app/build/
+android/app/release/
+android/build/
+android/.gradle/
+android/local.properties
+*.apk
+*.aab
+
+# iOS
+ios/Pods/
+ios/build/
+ios/**/*.xcworkspace
+!ios/*.xcodeproj/project.xcworkspace
+ios/**/*.xcuserdata
+*.ipa
+*.dSYM.zip
+*.dSYM
+ios/.xcode.env.local
+
+# Fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots
+fastlane/test_output
+
+# Bundle artifact
+*.jsbundle
+
+# CocoaPods
+ios/Pods/
+
+# Expo
+.expo/
+.expo-shared/
+
+# Debug
+*.log
+*.lock
+
+# Archives
+*.xcarchive/
+
+# Build artifacts
+*.so
+*.o
+*.a

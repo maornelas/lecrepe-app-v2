@@ -1,0 +1,1 @@
+/Users/maornelas/PrinterApp/android/app/build/intermediates/cxx/Debug/1s2h322j/obj/arm64-v8a
