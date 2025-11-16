@@ -13,8 +13,11 @@ import {
 } from 'react-native';
 import TcpSocket from 'react-native-tcp-socket';
 import NetInfo from '@react-native-community/netinfo';
-import { NativeModules, Platform } from 'react-native';
+import { NativeModules, Platform, PermissionsAndroid } from 'react-native';
 import RNFS from 'react-native-fs';
+// Import Bluetooth
+import RNBluetoothClassic from 'react-native-bluetooth-classic';
+import type { BluetoothDevice } from 'react-native-bluetooth-classic';
 
 // Declaración de tipos para TextEncoder (disponible en React Native)
 declare const TextEncoder: {
@@ -58,6 +61,14 @@ const App = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [currentScreen, setCurrentScreen] = useState<'orders' | 'settings'>('orders');
   const [activeTab, setActiveTab] = useState<'active' | 'closed'>('active');
+  
+  // Bluetooth state
+  const [useBluetooth, setUseBluetooth] = useState(false);
+  const [bluetoothDevice, setBluetoothDevice] = useState<BluetoothDevice | null>(null);
+  const [bluetoothDevices, setBluetoothDevices] = useState<BluetoothDevice[]>([]);
+  const [isScanning, setIsScanning] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [bluetoothAvailable, setBluetoothAvailable] = useState(true); // Asumir disponible por defecto
 
   const API_URL = 'https://api-tepozan.ketxal.com:81/v1.0/order/get/store/5';
   const API_CLOSED_URL = 'https://api-tepozan.ketxal.com:81/v1.0/order/getClosed/store/5';
@@ -76,7 +87,21 @@ const App = () => {
       }
     };
 
+    // Verificar si Bluetooth está disponible
+    const checkBluetooth = async () => {
+      try {
+        const isEnabled = await RNBluetoothClassic.isBluetoothEnabled();
+        setBluetoothAvailable(isEnabled !== undefined && isEnabled !== null);
+        console.log('Bluetooth available:', isEnabled);
+      } catch (error) {
+        console.warn('Bluetooth check failed:', error);
+        setBluetoothAvailable(false);
+      }
+    };
+
     getLocalIP();
+    checkBluetooth();
+    
     const unsubscribe = NetInfo.addEventListener(state => {
       if (state.details && 'ipAddress' in state.details && typeof state.details.ipAddress === 'string') {
         setLocalIP(state.details.ipAddress || 'No disponible');
@@ -188,9 +213,126 @@ const App = () => {
     fetchClosedOrders();
   };
 
+  // Bluetooth functions
+  const requestBluetoothPermissions = async (): Promise<boolean> => {
+    if (Platform.OS !== 'android') {
+      return true;
+    }
+
+    try {
+      const permissions = [
+        PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
+        PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
+        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+      ];
+
+      const granted = await PermissionsAndroid.requestMultiple(permissions);
+      
+      return (
+        granted[PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN] === PermissionsAndroid.RESULTS.GRANTED &&
+        granted[PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT] === PermissionsAndroid.RESULTS.GRANTED &&
+        granted[PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION] === PermissionsAndroid.RESULTS.GRANTED
+      );
+    } catch (err) {
+      console.warn(err);
+      return false;
+    }
+  };
+
+  const scanBluetoothDevices = async () => {
+    const hasPermission = await requestBluetoothPermissions();
+    if (!hasPermission) {
+      Alert.alert('Permisos', 'Se necesitan permisos de Bluetooth para escanear dispositivos');
+      return;
+    }
+
+    setIsScanning(true);
+    setBluetoothDevices([]);
+
+    try {
+      const isEnabled = await RNBluetoothClassic.isBluetoothEnabled();
+      if (!isEnabled) {
+        Alert.alert('Bluetooth', 'Por favor activa Bluetooth en tu dispositivo');
+        setIsScanning(false);
+        return;
+      }
+
+      const devices = await RNBluetoothClassic.getBondedDevices();
+      setBluetoothDevices(devices);
+      
+      if (devices.length === 0) {
+        Alert.alert('Dispositivos', 'No se encontraron dispositivos Bluetooth emparejados. Por favor empareja tu impresora primero en la configuración de Bluetooth del dispositivo.');
+      }
+    } catch (error: any) {
+      console.error('Bluetooth scan error:', error);
+      Alert.alert('Error', 'Error al escanear dispositivos: ' + (error.message || 'Error desconocido'));
+    } finally {
+      setIsScanning(false);
+    }
+  };
+
+  const connectBluetoothDevice = async (device: BluetoothDevice) => {
+    setIsConnecting(true);
+    try {
+      const connected = await device.connect();
+      if (connected) {
+        // Guardar el objeto device (que tiene el método write), no el resultado boolean
+        setBluetoothDevice(device);
+        setUseBluetooth(true);
+        Alert.alert('Éxito', `Conectado a ${device.name || device.address}`);
+      } else {
+        throw new Error('No se pudo establecer la conexión');
+      }
+    } catch (error: any) {
+      console.error('Bluetooth connect error:', error);
+      Alert.alert('Error', 'Error al conectar: ' + (error.message || 'Error desconocido'));
+    } finally {
+      setIsConnecting(false);
+    }
+  };
+
+  const disconnectBluetoothDevice = async () => {
+    try {
+      if (bluetoothDevice) {
+        await bluetoothDevice.disconnect();
+        setBluetoothDevice(null);
+        setUseBluetooth(false);
+        Alert.alert('Desconectado', 'Dispositivo Bluetooth desconectado');
+      }
+    } catch (error: any) {
+      Alert.alert('Error', 'Error al desconectar: ' + error.message);
+    }
+  };
+
+  const sendToBluetooth = async (content: string) => {
+    if (!bluetoothDevice) {
+      throw new Error('No hay dispositivo Bluetooth conectado');
+    }
+
+    try {
+      // Verificar conexión usando el método isConnected() del BluetoothDevice
+      const isConnected = await bluetoothDevice.isConnected();
+      if (!isConnected) {
+        throw new Error('Dispositivo Bluetooth desconectado');
+      }
+
+      // El método write() del BluetoothDevice acepta string o Buffer
+      // y devuelve Promise<boolean>
+      await bluetoothDevice.write(content);
+    } catch (error: any) {
+      console.error('Error sending to Bluetooth:', error);
+      throw error;
+    }
+  };
+
   const handlePrint = (order: Order) => {
-    if (!printerIP || !printerPort) {
-      Alert.alert('Error', 'Por favor ingresa la IP y puerto de la impresora');
+    if (!useBluetooth && (!printerIP || !printerPort)) {
+      Alert.alert('Error', 'Por favor configura la impresora (IP/Puerto o Bluetooth)');
+      return;
+    }
+    
+    if (useBluetooth && !bluetoothDevice) {
+      Alert.alert('Error', 'Por favor conecta un dispositivo Bluetooth');
       return;
     }
 
@@ -198,9 +340,10 @@ const App = () => {
 
     // Constante para precio de para llevar
     const TOGO_PRICE = 10; // Ajusta este valor según tu configuración
-    const anchoCantidad = 6; // Ancho para cantidad
-    const anchoDescripcion = 28; // Ancho para descripción
-    const anchoPrecio = 11; // Ancho para precio (incluye $ y .XX)
+    // Ajustado para impresora de 58mm (32 caracteres por línea)
+    const anchoCantidad = useBluetooth ? 4 : 6; // Ancho para cantidad (58mm: 4, 80mm: 6)
+    const anchoDescripcion = useBluetooth ? 18 : 28; // Ancho para descripción (58mm: 18, 80mm: 28)
+    const anchoPrecio = useBluetooth ? 8 : 11; // Ancho para precio (58mm: 8, 80mm: 11)
 
     // Comandos ESC/POS
     const ESC = '\x1B';
@@ -227,7 +370,8 @@ const App = () => {
 
       // Construir la línea completa sin saltos de línea intermedios
       const cantidad = units.toString().padEnd(anchoCantidad);
-      const descripcion = `${product_name.replace("Bebidas", "")} ${cleanTypeName}`.substring(0, anchoDescripcion).padEnd(anchoDescripcion);
+      const productDesc = `${product_name.replace("Bebidas", "")} ${cleanTypeName}`;
+      const descripcion = productDesc.substring(0, anchoDescripcion).padEnd(anchoDescripcion);
       const precio = `$${type_price.toFixed(2)}`.padStart(anchoPrecio);
       salida += `${cantidad}${descripcion}${precio}${lineFeed}`;
 
@@ -238,7 +382,8 @@ const App = () => {
       if (element?.extras !== undefined && Array.isArray(element.extras)) {
         element?.extras.forEach((extra: any) => {
           const cantidadExtra = "-".padEnd(anchoCantidad);
-          const descripcionExtra = `   extra:${extra.name}`.substring(0, anchoDescripcion).padEnd(anchoDescripcion);
+          const extraDesc = `  +${extra.name}`;
+          const descripcionExtra = extraDesc.substring(0, anchoDescripcion).padEnd(anchoDescripcion);
           const precioExtra = `$${extra.price.toFixed(2)}`.padStart(anchoPrecio);
           salida += `${cantidadExtra}${descripcionExtra}${precioExtra}${lineFeed}`;
           total += extra.price;
@@ -254,7 +399,15 @@ const App = () => {
       totalParaLlevar = (order?.products?.length - bebidasCount) * TOGO_PRICE;
     }
 
-    // Generar ticket (igual formato que la implementación anterior)
+    // Generar ticket - Ajustado para 58mm o 80mm según el tipo de conexión
+    const separator = useBluetooth ? '--------------------------------' : '---------------------------------------------';
+    const orderNameLine = useBluetooth 
+      ? `Nombre: ${order.name.length > 30 ? order.name.substring(0, 27) + '...' : order.name}\n`
+      : `Nombre Orden: ${order.name}\n`;
+    const headerLine = useBluetooth 
+      ? 'CANT DESCRIPCION      TOTAL\n'
+      : 'CANT   DESCRIPCION                  TOTAL\n';
+    
     const ticketContent = resetFormat + 
       header + lineFeed + // KOKORO en grande y negritas
       centerText + `
@@ -262,81 +415,96 @@ const App = () => {
 CD. MANUEL DOBLADO
 Tel: 432-100-4990
 ` + leftAlign + `
----------------------------------------------
+${separator}
 Fecha: ${new Date().toLocaleDateString()}  
 Hora: ${new Date().toLocaleTimeString()}
 Orden No: ${order.id_order}
-Nombre Orden: ${order.name}
----------------------------------------------
-CANT   DESCRIPCION                  TOTAL
----------------------------------------------
+${orderNameLine}${separator}
+${headerLine}${separator}
 ${salida}
----------------------------------------------
-SUBTOTAL:			$${total.toFixed(2)}
-PARA LLEVAR:			$${totalParaLlevar.toFixed(2)}
----------------------------------------------
-TOTAL A PAGAR:			$${(total+totalParaLlevar).toFixed(2)}
----------------------------------------------
+${separator}
+SUBTOTAL:            ${useBluetooth ? '' : '\t\t'}$${total.toFixed(2)}
+${totalParaLlevar > 0 ? `PARA LLEVAR:         ${useBluetooth ? '' : '\t\t'}$${totalParaLlevar.toFixed(2)}\n` : ''}${separator}
+TOTAL A PAGAR:        ${useBluetooth ? '' : '\t\t'}$${(total+totalParaLlevar).toFixed(2)}
+${separator}
 ` + centerText + `
-		GRACIAS POR TU COMPRA
-		VUELVE PRONTO :)
+        GRACIAS POR TU COMPRA
+        VUELVE PRONTO :)
 ` + leftAlign + `
----------------------------------------------
+${separator}
 
-${'\n'.repeat(10)}
+${'\n'.repeat(useBluetooth ? 5 : 10)}
 ` + resetFormat;
 
-    const client = TcpSocket.createConnection(
-      {
-        host: printerIP,
-        port: parseInt(printerPort, 10),
-      },
-      () => {
-        try {
-          // Usar TextEncoder en lugar de Buffer (que no existe en React Native)
-          const encoder = new TextEncoder();
-          const uint8Array = encoder.encode(ticketContent);
-          // Usar Uint8Array directamente
-          client.write(uint8Array as any);
-          
-          setTimeout(() => {
+    // Usar Bluetooth o TCP según la configuración
+    if (useBluetooth && bluetoothDevice) {
+      sendToBluetooth(ticketContent)
+        .then(() => {
+          setIsPrinting(null);
+          Alert.alert('Éxito', `Orden #${order.id_order} enviada a impresora Bluetooth`);
+        })
+        .catch((error: any) => {
+          setIsPrinting(null);
+          Alert.alert('Error', 'Error al enviar a impresora Bluetooth: ' + error.message);
+        });
+    } else {
+      const client = TcpSocket.createConnection(
+        {
+          host: printerIP,
+          port: parseInt(printerPort, 10),
+        },
+        () => {
+          try {
+            // Usar TextEncoder en lugar de Buffer (que no existe en React Native)
+            const encoder = new TextEncoder();
+            const uint8Array = encoder.encode(ticketContent);
+            // Usar Uint8Array directamente
+            client.write(uint8Array as any);
+            
+            setTimeout(() => {
+              client.destroy();
+              setIsPrinting(null);
+              Alert.alert('Éxito', `Orden #${order.id_order} enviada a impresora`);
+            }, 500);
+          } catch (error: any) {
             client.destroy();
             setIsPrinting(null);
-            Alert.alert('Éxito', `Orden #${order.id_order} enviada a impresora`);
-          }, 500);
-        } catch (error: any) {
-          client.destroy();
-          setIsPrinting(null);
-          Alert.alert('Error', 'Error al enviar datos: ' + error.message);
+            Alert.alert('Error', 'Error al enviar datos: ' + error.message);
+          }
         }
-      }
-    );
-
-    client.on('error', (error: any) => {
-      client.destroy();
-      setIsPrinting(null);
-      Alert.alert(
-        'Error de conexión',
-        'No se pudo conectar a la impresora.\n\nVerifica:\n- IP correcta: ' + printerIP + '\n- Puerto: ' + printerPort + '\n- Que la tablet esté en la misma red WiFi'
       );
-    });
 
-    client.on('close', () => {
-      setIsPrinting(null);
-    });
-
-    setTimeout(() => {
-      if (client && !client.destroyed) {
+      client.on('error', (error: any) => {
         client.destroy();
         setIsPrinting(null);
-        Alert.alert('Timeout', 'La impresora no respondió. Verifica la conexión.');
-      }
-    }, 10000);
+        Alert.alert(
+          'Error de conexión',
+          'No se pudo conectar a la impresora.\n\nVerifica:\n- IP correcta: ' + printerIP + '\n- Puerto: ' + printerPort + '\n- Que la tablet esté en la misma red WiFi'
+        );
+      });
+
+      client.on('close', () => {
+        setIsPrinting(null);
+      });
+
+      setTimeout(() => {
+        if (client && !client.destroyed) {
+          client.destroy();
+          setIsPrinting(null);
+          Alert.alert('Timeout', 'La impresora no respondió. Verifica la conexión.');
+        }
+      }, 10000);
+    }
   };
 
   const handleDayClose = () => {
-    if (!printerIP || !printerPort) {
-      Alert.alert('Error', 'Por favor ingresa la IP y puerto de la impresora');
+    if (!useBluetooth && (!printerIP || !printerPort)) {
+      Alert.alert('Error', 'Por favor configura la impresora (IP/Puerto o Bluetooth)');
+      return;
+    }
+    
+    if (useBluetooth && !bluetoothDevice) {
+      Alert.alert('Error', 'Por favor conecta un dispositivo Bluetooth');
       return;
     }
 
@@ -402,12 +570,13 @@ ${'\n'.repeat(10)}
     // Ordenar items por nombre (igual que la implementación anterior)
     const items = Object.values(data).sort((a, b) => a.label.localeCompare(b.label));
     
-    // Generar resumen de ventas (igual que la implementación anterior)
-    const anchoDescripcion = 35;
-    const anchoPrecio = 10;
+    // Generar resumen de ventas - Ajustado para 58mm o 80mm
+    const anchoDescripcion = useBluetooth ? 18 : 35;
+    const anchoPrecio = useBluetooth ? 8 : 10;
     let salida = 'Resumen de ventas:\n\n';
     items.forEach(({ count, label, total }) => {
-      salida += `${count} - ${label}`.padEnd(anchoDescripcion) + `$${total.toFixed(2)}`.padStart(anchoPrecio) + '\n';
+      const labelShort = label.substring(0, anchoDescripcion);
+      salida += `${count}   ${labelShort}`.padEnd(anchoDescripcion + 4) + `$${total.toFixed(2)}`.padStart(anchoPrecio) + '\n';
     });
 
     // Calcular total final (igual que la implementación anterior)
@@ -424,7 +593,12 @@ ${'\n'.repeat(10)}
     console.log('   Para llevar:', totalParaLlevar.toFixed(2));
     console.log('   TOTAL CIERRE:', totalCierre.toFixed(2));
 
-    // Generar ticket (igual formato que la implementación anterior)
+    // Generar ticket - Ajustado para 58mm o 80mm
+    const separator = useBluetooth ? '--------------------------------' : '---------------------------------------------';
+    const headerLine = useBluetooth 
+      ? 'CANT DESCRIPCION      TOTAL\n'
+      : 'CANT   DESCRIPCION                  TOTAL\n';
+    
     const dayCloseContent = resetFormat + 
       header + lineFeed + // KOKORO en grande y negritas
       centerText + `
@@ -432,71 +606,82 @@ ${'\n'.repeat(10)}
 CD. MANUEL DOBLADO
 Tel: 432-100-4990
 ` + leftAlign + `
----------------------------------------------
+${separator}
 **CORTE DEL DIA 
 FECHA: ${new Date().toString()}
----------------------------------------------
----------------------------------------------
-CANT   DESCRIPCION                  TOTAL
----------------------------------------------
+${separator}
+${headerLine}${separator}
 ${salida}
----------------------------------------------
-SUBTOTAL: 			   $${total.toFixed(2)}
----------------------------------------------
-EXTRAS: 			          $${totalExtras.toFixed(2)}
----------------------------------------------
-PARA LLEVAR:     		  $${totalParaLlevar.toFixed(2)}
----------------------------------------------
-TOTAL:            		 ${totalFormateado}
----------------------------------------------
+${separator}
+SUBTOTAL:            ${useBluetooth ? '' : '\t\t\t'}$${total.toFixed(2)}
+${separator}
+EXTRAS:              ${useBluetooth ? '' : '\t\t\t'}$${totalExtras.toFixed(2)}
+${separator}
+PARA LLEVAR:         ${useBluetooth ? '' : '\t\t\t'}$${totalParaLlevar.toFixed(2)}
+${separator}
+TOTAL:               ${useBluetooth ? '' : '\t\t\t'}${totalFormateado}
+${separator}
 
-${'\n'.repeat(10)}
+${'\n'.repeat(useBluetooth ? 5 : 10)}
 ` + resetFormat;
 
-    const client = TcpSocket.createConnection(
-      {
-        host: printerIP,
-        port: parseInt(printerPort, 10),
-      },
-      () => {
-        try {
-          const encoder = new TextEncoder();
-          const uint8Array = encoder.encode(dayCloseContent);
-          client.write(uint8Array as any);
-          
-          setTimeout(() => {
+    // Usar Bluetooth o TCP según la configuración
+    if (useBluetooth && bluetoothDevice) {
+      sendToBluetooth(dayCloseContent)
+        .then(() => {
+          setIsPrinting(null);
+          Alert.alert('Éxito', 'Cierre del día enviado a impresora Bluetooth');
+        })
+        .catch((error: any) => {
+          setIsPrinting(null);
+          Alert.alert('Error', 'Error al enviar a impresora Bluetooth: ' + error.message);
+        });
+    } else {
+      const client = TcpSocket.createConnection(
+        {
+          host: printerIP,
+          port: parseInt(printerPort, 10),
+        },
+        () => {
+          try {
+            const encoder = new TextEncoder();
+            const uint8Array = encoder.encode(dayCloseContent);
+            client.write(uint8Array as any);
+            
+            setTimeout(() => {
+              client.destroy();
+              setIsPrinting(null);
+              Alert.alert('Éxito', 'Cierre del día enviado a impresora');
+            }, 500);
+          } catch (error: any) {
             client.destroy();
             setIsPrinting(null);
-            Alert.alert('Éxito', 'Cierre del día enviado a impresora');
-          }, 500);
-        } catch (error: any) {
-          client.destroy();
-          setIsPrinting(null);
-          Alert.alert('Error', 'Error al enviar datos: ' + error.message);
+            Alert.alert('Error', 'Error al enviar datos: ' + error.message);
+          }
         }
-      }
-    );
-
-    client.on('error', (error: any) => {
-      client.destroy();
-      setIsPrinting(null);
-      Alert.alert(
-        'Error de conexión',
-        'No se pudo conectar a la impresora.\n\nVerifica:\n- IP correcta: ' + printerIP + '\n- Puerto: ' + printerPort + '\n- Que la tablet esté en la misma red WiFi'
       );
-    });
 
-    client.on('close', () => {
-      setIsPrinting(null);
-    });
-
-    setTimeout(() => {
-      if (client && !client.destroyed) {
+      client.on('error', (error: any) => {
         client.destroy();
         setIsPrinting(null);
-        Alert.alert('Timeout', 'La impresora no respondió. Verifica la conexión.');
-      }
-    }, 10000);
+        Alert.alert(
+          'Error de conexión',
+          'No se pudo conectar a la impresora.\n\nVerifica:\n- IP correcta: ' + printerIP + '\n- Puerto: ' + printerPort + '\n- Que la tablet esté en la misma red WiFi'
+        );
+      });
+
+      client.on('close', () => {
+        setIsPrinting(null);
+      });
+
+      setTimeout(() => {
+        if (client && !client.destroyed) {
+          client.destroy();
+          setIsPrinting(null);
+          Alert.alert('Timeout', 'La impresora no respondió. Verifica la conexión.');
+        }
+      }, 10000);
+    }
   };
 
   const renderOrdersScreen = () => {
@@ -634,8 +819,13 @@ ${'\n'.repeat(10)}
   };
 
   const handleTestPrint = async () => {
-    if (!printerIP || !printerPort) {
-      Alert.alert('Error', 'Por favor ingresa la IP y puerto de la impresora');
+    if (!useBluetooth && (!printerIP || !printerPort)) {
+      Alert.alert('Error', 'Por favor configura la impresora (IP/Puerto o Bluetooth)');
+      return;
+    }
+    
+    if (useBluetooth && !bluetoothDevice) {
+      Alert.alert('Error', 'Por favor conecta un dispositivo Bluetooth');
       return;
     }
 
@@ -684,50 +874,63 @@ FECHA: ${currentDate}
 ${'\n'.repeat(10)}
 ` + resetFormat;
 
-      const client = TcpSocket.createConnection(
-        {
-          host: printerIP,
-          port: parseInt(printerPort, 10),
-        },
-        () => {
-          try {
-            const encoder = new TextEncoder();
-            const uint8Array = encoder.encode(testContent);
-            client.write(uint8Array as any);
-          
-          setTimeout(() => {
+      // Usar Bluetooth o TCP según la configuración
+      if (useBluetooth && bluetoothDevice) {
+        sendToBluetooth(testContent)
+          .then(() => {
+            setIsPrinting(null);
+            Alert.alert('Éxito', 'Impresión de prueba enviada correctamente a Bluetooth');
+          })
+          .catch((error: any) => {
+            setIsPrinting(null);
+            Alert.alert('Error', 'Error al enviar a impresora Bluetooth: ' + error.message);
+          });
+      } else {
+        const client = TcpSocket.createConnection(
+          {
+            host: printerIP,
+            port: parseInt(printerPort, 10),
+          },
+          () => {
+            try {
+              const encoder = new TextEncoder();
+              const uint8Array = encoder.encode(testContent);
+              client.write(uint8Array as any);
+            
+            setTimeout(() => {
+              client.destroy();
+              setIsPrinting(null);
+              Alert.alert('Éxito', 'Impresión de prueba enviada correctamente');
+            }, 500);
+          } catch (error: any) {
             client.destroy();
             setIsPrinting(null);
-            Alert.alert('Éxito', 'Impresión de prueba enviada correctamente');
-          }, 500);
-        } catch (error: any) {
-          client.destroy();
-          setIsPrinting(null);
-          Alert.alert('Error', 'Error al enviar datos: ' + error.message);
+            Alert.alert('Error', 'Error al enviar datos: ' + error.message);
+          }
         }
-      }
-    );
-
-    client.on('error', (error: any) => {
-      client.destroy();
-      setIsPrinting(null);
-      Alert.alert(
-        'Error de conexión',
-        'No se pudo conectar a la impresora.\n\nVerifica:\n- IP correcta: ' + printerIP + '\n- Puerto: ' + printerPort + '\n- Que la tablet esté en la misma red WiFi'
       );
-    });
 
-    client.on('close', () => {
-      setIsPrinting(null);
-    });
+      client.on('error', (error: any) => {
+        client.destroy();
+        setIsPrinting(null);
+        Alert.alert(
+          'Error de conexión',
+          'No se pudo conectar a la impresora.\n\nVerifica:\n- IP correcta: ' + printerIP + '\n- Puerto: ' + printerPort + '\n- Que la tablet esté en la misma red WiFi'
+        );
+      });
 
-      setTimeout(() => {
-        if (client && !client.destroyed) {
-          client.destroy();
+        client.on('close', () => {
           setIsPrinting(null);
-          Alert.alert('Timeout', 'La impresora no respondió. Verifica la conexión.');
-        }
-      }, 10000);
+        });
+
+        setTimeout(() => {
+          if (client && !client.destroyed) {
+            client.destroy();
+            setIsPrinting(null);
+            Alert.alert('Timeout', 'La impresora no respondió. Verifica la conexión.');
+          }
+        }, 10000);
+      }
     } catch (error: any) {
       setIsPrinting(null);
       Alert.alert('Error', 'Error al generar la impresión: ' + error.message);
@@ -737,30 +940,120 @@ ${'\n'.repeat(10)}
   const renderSettingsScreen = () => (
     <ScrollView style={styles.settingsContainer}>
       <View style={styles.settingsSection}>
-        <Text style={styles.settingsSectionTitle}>Configuración de Impresora</Text>
+        <Text style={styles.settingsSectionTitle}>Tipo de Conexión</Text>
         <View style={styles.configRow}>
-          <View style={[styles.configInput, {marginRight: 10}]}>
-          <Text style={styles.label}>IP de la Impresora</Text>
-          <TextInput
-            style={styles.input}
-            value={printerIP}
-            onChangeText={setPrinterIP}
-            placeholder="192.168.1.26"
-            keyboardType="numeric"
-            autoCapitalize="none"
-          />
+          <TouchableOpacity
+            style={[
+              styles.connectionTypeButton,
+              !useBluetooth && styles.connectionTypeButtonActive,
+            ]}
+            onPress={() => setUseBluetooth(false)}>
+            <Text style={[
+              styles.connectionTypeButtonText,
+              !useBluetooth && styles.connectionTypeButtonTextActive,
+            ]}>
+              WiFi (TCP)
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.connectionTypeButton,
+              useBluetooth && styles.connectionTypeButtonActive,
+            ]}
+            onPress={() => setUseBluetooth(true)}>
+            <Text style={[
+              styles.connectionTypeButtonText,
+              useBluetooth && styles.connectionTypeButtonTextActive,
+            ]}>
+              Bluetooth
+            </Text>
+          </TouchableOpacity>
         </View>
-          <View style={styles.configInput}>
-          <Text style={styles.label}>Puerto</Text>
-          <TextInput
-            style={styles.input}
-            value={printerPort}
-            onChangeText={setPrinterPort}
-            placeholder="9100"
-            keyboardType="numeric"
-          />
+      </View>
+
+      {!useBluetooth ? (
+        <View style={styles.settingsSection}>
+          <Text style={styles.settingsSectionTitle}>Configuración de Impresora WiFi</Text>
+          <Text style={styles.infoLabel}>Formato: 80mm (automático con WiFi)</Text>
+          <View style={styles.configRow}>
+            <View style={[styles.configInput, {marginRight: 10}]}>
+            <Text style={styles.label}>IP de la Impresora</Text>
+            <TextInput
+              style={styles.input}
+              value={printerIP}
+              onChangeText={setPrinterIP}
+              placeholder="192.168.1.26"
+              keyboardType="numeric"
+              autoCapitalize="none"
+            />
+          </View>
+            <View style={styles.configInput}>
+            <Text style={styles.label}>Puerto</Text>
+            <TextInput
+              style={styles.input}
+              value={printerPort}
+              onChangeText={setPrinterPort}
+              placeholder="9100"
+              keyboardType="numeric"
+            />
+          </View>
+          </View>
         </View>
+      ) : (
+        <View style={styles.settingsSection}>
+          <Text style={styles.settingsSectionTitle}>Configuración de Impresora Bluetooth</Text>
+          {!bluetoothAvailable ? (
+            <View style={styles.infoCard}>
+              <Text style={styles.infoLabel}>Bluetooth no disponible</Text>
+              <Text style={styles.infoValue}>La funcionalidad Bluetooth no está disponible en este dispositivo o no se pudo inicializar correctamente.</Text>
+            </View>
+          ) : bluetoothDevice ? (
+            <View style={styles.infoCard}>
+              <Text style={styles.infoLabel}>Dispositivo Conectado</Text>
+              <Text style={styles.infoValue}>{bluetoothDevice.name || bluetoothDevice.address}</Text>
+              <TouchableOpacity
+                style={styles.disconnectButton}
+                onPress={disconnectBluetoothDevice}>
+                <Text style={styles.disconnectButtonText}>Desconectar</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <>
+              <Text style={styles.infoLabel}>Formato: 58mm (automático con Bluetooth)</Text>
+              <TouchableOpacity
+                style={[
+                  styles.scanButton,
+                  isScanning && styles.scanButtonDisabled,
+                ]}
+                onPress={scanBluetoothDevices}
+                disabled={isScanning}>
+                {isScanning ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.scanButtonText}>Escanear Dispositivos</Text>
+                )}
+              </TouchableOpacity>
+              
+              {bluetoothDevices.length > 0 && (
+                <View style={styles.devicesList}>
+                  {bluetoothDevices.map((device) => (
+                    <TouchableOpacity
+                      key={device.address}
+                      style={styles.deviceItem}
+                      onPress={() => connectBluetoothDevice(device)}
+                      disabled={isConnecting}>
+                      <Text style={styles.deviceName}>{device.name || 'Dispositivo sin nombre'}</Text>
+                      <Text style={styles.deviceAddress}>{device.address}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </>
+          )}
         </View>
+      )}
+
+      <View style={styles.settingsSection}>
         <TouchableOpacity
           style={[
             styles.testPrintButton,
@@ -1077,6 +1370,73 @@ const styles = StyleSheet.create({
   tabTextActive: {
     color: '#2196F3',
     fontWeight: 'bold',
+  },
+  connectionTypeButton: {
+    flex: 1,
+    padding: 15,
+    backgroundColor: '#e0e0e0',
+    borderRadius: 8,
+    marginHorizontal: 5,
+    alignItems: 'center',
+  },
+  connectionTypeButtonActive: {
+    backgroundColor: '#2196F3',
+  },
+  connectionTypeButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#666',
+  },
+  connectionTypeButtonTextActive: {
+    color: '#fff',
+  },
+  scanButton: {
+    backgroundColor: '#2196F3',
+    padding: 15,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  scanButtonDisabled: {
+    backgroundColor: '#ccc',
+  },
+  scanButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  devicesList: {
+    marginTop: 15,
+  },
+  deviceItem: {
+    backgroundColor: '#fff',
+    padding: 15,
+    borderRadius: 8,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  deviceName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 5,
+  },
+  deviceAddress: {
+    fontSize: 12,
+    color: '#666',
+  },
+  disconnectButton: {
+    backgroundColor: '#f44336',
+    padding: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  disconnectButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
 
