@@ -389,19 +389,39 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({ navigation }) => {
         )}
       </ScrollView>
 
-      {/* Order Detail Modal */}
+      {/* Order Detail Modal - Full Screen */}
       <Modal
         visible={orderDetailOpen}
-        transparent={true}
+        transparent={false}
         animationType="slide"
         onRequestClose={() => setOrderDetailOpen(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+        <SafeAreaView style={styles.modalFullScreen}>
+          <View style={styles.modalContentFullScreen}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
-                Orden #{selectedOrder?.id_order}
-              </Text>
+              <View style={styles.modalHeaderLeft}>
+                <Text style={styles.modalHeaderIcon}>
+                  {selectedOrder?.togo ? '📋' : '🪑'}
+                </Text>
+                <View style={[styles.modalHeaderInfo, { marginLeft: 8 }]}>
+                  <Text style={styles.modalHeaderLabel}>Lugar</Text>
+                  <Text style={styles.modalHeaderValue}>
+                    {selectedOrder?.togo ? 'Para llevar' : `Mesa ${selectedOrder?.id_place || ''}`}
+                  </Text>
+                </View>
+                <View style={[styles.modalHeaderInfo, { marginLeft: 12 }]}>
+                  <Text style={styles.modalHeaderLabel}>Orden</Text>
+                  <Text style={[styles.modalHeaderValue, styles.modalOrderNumber]}>
+                    #{selectedOrder?.id_order}
+                  </Text>
+                </View>
+                <View style={[styles.modalHeaderInfo, { marginLeft: 12 }]}>
+                  <Text style={styles.modalHeaderLabel}>Total</Text>
+                  <Text style={[styles.modalHeaderValue, styles.modalTotal]}>
+                    ${getTotalAmount(selectedOrder || {}).toFixed(2)}
+                  </Text>
+                </View>
+              </View>
               <TouchableOpacity
                 style={styles.closeButton}
                 onPress={() => setOrderDetailOpen(false)}
@@ -410,48 +430,95 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({ navigation }) => {
               </TouchableOpacity>
             </View>
             {selectedOrder && (
-              <ScrollView style={styles.modalBody}>
-                <Text style={styles.detailLabel}>Cliente:</Text>
-                <Text style={styles.detailValue}>
-                  {selectedOrder.client?.name || selectedOrder.name || 'N/A'}
+              <ScrollView style={styles.modalBody} contentContainerStyle={styles.modalBodyContent}>
+                <Text style={styles.modalClientName}>
+                  Nombre: {selectedOrder.client?.name || selectedOrder.name || 'Cliente General'}
                 </Text>
-                <Text style={styles.detailLabel}>Estado:</Text>
-                <Text style={styles.detailValue}>{selectedOrder.status}</Text>
-                <Text style={styles.detailLabel}>Productos:</Text>
-                {selectedOrder.items?.map((item, index) => (
-                  <View key={index} style={styles.productItem}>
-                    <Text style={styles.productName}>
-                      {item.product_name} - {item.type_name}
-                    </Text>
-                    <Text style={styles.productDetails}>
-                      Cantidad: {item.units} | Precio: ${item.type_price.toFixed(2)}
-                    </Text>
-                    {item.toppings && item.toppings.length > 0 && (
-                      <Text style={styles.toppingsText}>
-                        Toppings: {item.toppings.map((t: any) => t.name).join(', ')}
-                      </Text>
-                    )}
-                    {item.extras && item.extras.length > 0 && (
-                      <Text style={styles.extrasText}>
-                        Extras: {item.extras.map((e: any) => e.name).join(', ')}
-                      </Text>
-                    )}
+                
+                {/* Two columns: Bebidas and Crepas */}
+                <View style={styles.productsContainer}>
+                  {/* Bebidas Column */}
+                  <View style={[styles.productsColumn, { marginRight: 6 }]}>
+                    <Text style={styles.productsColumnTitle}>BEBIDAS</Text>
+                    {(() => {
+                      const allItems = selectedOrder.items || selectedOrder.products || [];
+                      const drinks = allItems.filter((item: any) => {
+                        const itemType = item.type || item.product_type || '';
+                        return itemType !== 'crepa' && itemType !== 'crepas';
+                      });
+                      
+                      if (drinks.length === 0) {
+                        return (
+                          <Text style={styles.noItemsText}>No hay bebidas</Text>
+                        );
+                      }
+                      
+                      return drinks.map((item: any, index: number) => {
+                        const itemName = item.name || item.product_name || 'Sin nombre';
+                        const itemUnits = item.units || 0;
+                        
+                        return (
+                          <View key={index} style={styles.productListItem}>
+                            <View style={styles.productListItemLeft}>
+                              <View style={styles.productIcon}>
+                                <Text style={styles.productIconText}>☕</Text>
+                              </View>
+                              <View style={styles.productInfo}>
+                                <Text style={styles.productListItemName}>{itemName}</Text>
+                                <Text style={styles.productListItemQuantity}>
+                                  cant: <Text style={styles.productListItemQuantityBold}>{itemUnits}</Text>
+                                </Text>
+                              </View>
+                            </View>
+                          </View>
+                        );
+                      });
+                    })()}
                   </View>
-                ))}
-                {selectedOrder.products?.map((product, index) => (
-                  <View key={index} style={styles.productItem}>
-                    <Text style={styles.productName}>
-                      {product.product_name} - {product.type_name}
-                    </Text>
-                    <Text style={styles.productDetails}>
-                      Cantidad: {product.units} | Precio: ${product.type_price.toFixed(2)}
-                    </Text>
+
+                  {/* Crepas Column */}
+                  <View style={[styles.productsColumn, { marginLeft: 6 }]}>
+                    <Text style={styles.productsColumnTitle}>CREPAS</Text>
+                    {(() => {
+                      const allItems = selectedOrder.items || selectedOrder.products || [];
+                      const crepes = allItems.filter((item: any) => {
+                        const itemType = item.type || item.product_type || '';
+                        return itemType === 'crepa' || itemType === 'crepas';
+                      });
+                      
+                      if (crepes.length === 0) {
+                        return (
+                          <Text style={styles.noItemsText}>No hay crepas</Text>
+                        );
+                      }
+                      
+                      return crepes.map((item: any, index: number) => {
+                        const itemName = item.name || item.product_name || 'Sin nombre';
+                        const itemUnits = item.units || 0;
+                        
+                        return (
+                          <View key={index} style={styles.productListItem}>
+                            <View style={styles.productListItemLeft}>
+                              <View style={styles.productIcon}>
+                                <Text style={styles.productIconText}>🍕</Text>
+                              </View>
+                              <View style={styles.productInfo}>
+                                <Text style={styles.productListItemName}>{itemName}</Text>
+                                <Text style={styles.productListItemQuantity}>
+                                  cant: <Text style={styles.productListItemQuantityBold}>{itemUnits}</Text>
+                                </Text>
+                              </View>
+                            </View>
+                          </View>
+                        );
+                      });
+                    })()}
                   </View>
-                ))}
+                </View>
               </ScrollView>
             )}
           </View>
-        </View>
+        </SafeAreaView>
       </Modal>
     </SafeAreaView>
   );
@@ -693,6 +760,14 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: 'bold',
   },
+  modalFullScreen: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  modalContentFullScreen: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -711,6 +786,37 @@ const styles = StyleSheet.create({
     padding: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
+    backgroundColor: '#f5f5f5',
+  },
+  modalHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  modalHeaderIcon: {
+    fontSize: 24,
+  },
+  modalHeaderInfo: {
+    flex: 1,
+  },
+  modalHeaderLabel: {
+    fontSize: 10,
+    color: '#666',
+    marginBottom: 2,
+  },
+  modalHeaderValue: {
+    fontSize: 12,
+    color: '#333',
+    fontWeight: '500',
+  },
+  modalOrderNumber: {
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
+  modalTotal: {
+    fontWeight: 'bold',
+    fontSize: 14,
+    color: '#2196F3',
   },
   modalTitle: {
     fontSize: 20,
@@ -722,13 +828,90 @@ const styles = StyleSheet.create({
     height: 32,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#2D3036',
+    borderRadius: 16,
   },
   closeButtonText: {
-    fontSize: 24,
-    color: '#666',
+    fontSize: 18,
+    color: '#E8A334',
+    fontWeight: 'bold',
   },
   modalBody: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  modalBodyContent: {
     padding: 16,
+    paddingBottom: 32,
+  },
+  modalClientName: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  productsContainer: {
+    flexDirection: 'row',
+  },
+  productsColumn: {
+    flex: 1,
+  },
+  productsColumnTitle: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 12,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  productListItem: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+    paddingVertical: 12,
+    minHeight: 60,
+  },
+  productListItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  productIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#f0f0f0',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  productIconText: {
+    fontSize: 16,
+  },
+  productInfo: {
+    flex: 1,
+  },
+  productListItemName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+  },
+  productListItemQuantity: {
+    fontSize: 12,
+    color: '#666',
+  },
+  productListItemQuantityBold: {
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  noItemsText: {
+    fontSize: 12,
+    color: '#999',
+    fontStyle: 'italic',
+    textAlign: 'center',
+    paddingVertical: 20,
   },
   detailLabel: {
     fontSize: 12,
