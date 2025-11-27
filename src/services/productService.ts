@@ -141,6 +141,69 @@ export class ProductService {
       throw error;
     }
   }
+
+  /**
+   * Create a new category
+   */
+  static async createCategory(categoryData: { name: string; type: string }): Promise<ApiResponse<any>> {
+    try {
+      const response = await fetch(API_ENDPOINTS.CREATE_CATEGORY, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(categoryData),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Error ${response.status}: ${errorText}`);
+      }
+
+      const data = await response.json();
+      return {
+        data,
+        success: true,
+      };
+    } catch (error: any) {
+      console.error('Error creating category:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Create a new subcategory
+   */
+  static async createSubCategory(categoryType: string, subCategoryData: { name: string; label: string }): Promise<ApiResponse<any>> {
+    try {
+      const response = await fetch(API_ENDPOINTS.CREATE_SUBCATEGORY, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          categoryType,
+          subCategoryData,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Error ${response.status}: ${errorText}`);
+      }
+
+      const data = await response.json();
+      return {
+        data,
+        success: true,
+      };
+    } catch (error: any) {
+      console.error('Error creating subcategory:', error);
+      throw error;
+    }
+  }
 }
 
 

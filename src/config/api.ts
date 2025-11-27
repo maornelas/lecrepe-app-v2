@@ -34,6 +34,8 @@ export const API_ENDPOINTS = {
   CREATE_PRODUCT: `${API_BASE_URL}/product/create/`,
   UPDATE_PRODUCT: (id: string | number) => `${API_BASE_URL}/product/update/${id}`,
   DELETE_PRODUCT: (id: string | number) => `${API_BASE_URL}/product/delete/${id}`,
+  CREATE_CATEGORY: `${API_BASE_URL}/product/create-category`,
+  CREATE_SUBCATEGORY: `${API_BASE_URL}/product/create-subcategory`,
   
   // Member endpoints
   GET_ALL_MEMBERS: (id_store: string | number) => `${API_BASE_URL}/member/get/store/${id_store}`,
