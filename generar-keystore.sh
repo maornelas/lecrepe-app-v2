@@ -64,7 +64,7 @@ read -p "Estado/Provincia (ST): " ST
 read -p "Código de país (C, ej: MX): " C
 
 # Valores por defecto si están vacíos
-CN=${CN:-"PrinterApp"}
+CN=${CN:-"lecrepe-app"}
 OU=${OU:-"Development"}
 O=${O:-"Kokoro"}
 L=${L:-"Ciudad"}

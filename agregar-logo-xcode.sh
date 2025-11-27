@@ -2,9 +2,9 @@
 
 # Script para agregar logo-kokoro.png al proyecto de Xcode
 
-PROJECT_DIR="ios/PrinterApp"
+PROJECT_DIR="ios/lecrepe-app"
 LOGO_FILE="logo-kokoro.png"
-PROJECT_FILE="ios/PrinterApp.xcodeproj/project.pbxproj"
+PROJECT_FILE="ios/lecrepe-app.xcodeproj/project.pbxproj"
 
 echo "📱 Agregando logo al proyecto de Xcode..."
 
@@ -44,14 +44,14 @@ echo "✅ Logo copiado a $PROJECT_DIR/$LOGO_FILE"
 echo ""
 echo "⚠️  IMPORTANTE: Necesitas agregar el logo manualmente en Xcode:"
 echo "   1. Abre Xcode"
-echo "   2. Abre el proyecto: ios/PrinterApp.xcworkspace"
-echo "   3. En el navegador de archivos (izquierda), haz clic derecho en la carpeta 'PrinterApp'"
-echo "   4. Selecciona 'Add Files to PrinterApp...'"
+echo "   2. Abre el proyecto: ios/lecrepe-app.xcworkspace"
+echo "   3. En el navegador de archivos (izquierda), haz clic derecho en la carpeta 'lecrepe-app'"
+echo "   4. Selecciona 'Add Files to lecrepe-app...'"
 echo "   5. Selecciona: $PROJECT_DIR/$LOGO_FILE"
 echo "   6. Asegúrate de que 'Copy items if needed' esté marcado"
-echo "   7. Asegúrate de que 'Add to targets: PrinterApp' esté marcado"
+echo "   7. Asegúrate de que 'Add to targets: lecrepe-app' esté marcado"
 echo "   8. Haz clic en 'Add'"
 echo ""
 echo "O ejecuta este comando para intentar agregarlo automáticamente (experimental):"
-echo "   ruby -e \"require 'xcodeproj'; project = Xcodeproj::Project.open('$PROJECT_FILE'); target = project.targets.first; file_ref = project.main_group.find_subpath('PrinterApp').new_file('$LOGO_FILE'); target.add_file_references([file_ref]); project.save\""
+echo "   ruby -e \"require 'xcodeproj'; project = Xcodeproj::Project.open('$PROJECT_FILE'); target = project.targets.first; file_ref = project.main_group.find_subpath('lecrepe-app').new_file('$LOGO_FILE'); target.add_file_references([file_ref]); project.save\""
 

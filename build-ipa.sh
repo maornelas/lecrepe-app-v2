@@ -15,9 +15,9 @@ NC='\033[0m' # No Color
 # Directorios
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 IOS_DIR="$PROJECT_DIR/ios"
-ARCHIVE_PATH="$IOS_DIR/build/PrinterApp.xcarchive"
+ARCHIVE_PATH="$IOS_DIR/build/lecrepe-app.xcarchive"
 EXPORT_PATH="$IOS_DIR/build/export"
-IPA_PATH="$EXPORT_PATH/PrinterApp.ipa"
+IPA_PATH="$EXPORT_PATH/lecrepe-app.ipa"
 
 # Limpiar builds anteriores (pero mantener archivos generados)
 echo -e "${YELLOW}🧹 Limpiando builds anteriores...${NC}"
@@ -32,7 +32,7 @@ fi
 cd "$IOS_DIR"
 
 # Verificar que el workspace existe
-if [ ! -f "PrinterApp.xcworkspace/contents.xcworkspacedata" ]; then
+if [ ! -f "lecrepe-app.xcworkspace/contents.xcworkspacedata" ]; then
     echo -e "${RED}❌ Error: No se encontró el workspace de Xcode${NC}"
     exit 1
 fi
@@ -41,8 +41,8 @@ fi
 echo -e "${YELLOW}📦 Compilando y creando archive...${NC}"
 if command -v xcpretty &> /dev/null; then
     xcodebuild archive \
-        -workspace PrinterApp.xcworkspace \
-        -scheme PrinterApp \
+        -workspace lecrepe-app.xcworkspace \
+        -scheme lecrepe-app \
         -configuration Release \
         -archivePath "$ARCHIVE_PATH" \
         -allowProvisioningUpdates \
@@ -50,8 +50,8 @@ if command -v xcpretty &> /dev/null; then
         | xcpretty || exit 1
 else
     xcodebuild archive \
-        -workspace PrinterApp.xcworkspace \
-        -scheme PrinterApp \
+        -workspace lecrepe-app.xcworkspace \
+        -scheme lecrepe-app \
         -configuration Release \
         -archivePath "$ARCHIVE_PATH" \
         -allowProvisioningUpdates \

@@ -6,7 +6,7 @@
 set -e
 
 echo "══════════════════════════════════════════════════════════"
-echo "  🚀 Generador de .ipa para PrinterApp"
+echo "  🚀 Generador de .ipa para lecrepe-app"
 echo "══════════════════════════════════════════════════════════"
 echo ""
 
@@ -20,7 +20,7 @@ NC='\033[0m'
 # Directorios
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 IOS_DIR="$PROJECT_DIR/ios"
-ARCHIVE_PATH="$IOS_DIR/build/PrinterApp.xcarchive"
+ARCHIVE_PATH="$IOS_DIR/build/lecrepe-app.xcarchive"
 EXPORT_PATH="$IOS_DIR/build/export"
 
 echo -e "${BLUE}📋 Paso 1: Verificando configuración...${NC}"
@@ -33,7 +33,7 @@ if ! command -v xcodebuild &> /dev/null; then
 fi
 
 # Verificar que el workspace existe
-if [ ! -f "$IOS_DIR/PrinterApp.xcworkspace/contents.xcworkspacedata" ]; then
+if [ ! -f "$IOS_DIR/lecrepe-app.xcworkspace/contents.xcworkspacedata" ]; then
     echo -e "${RED}❌ Error: No se encontró el workspace de Xcode${NC}"
     exit 1
 fi
@@ -55,8 +55,8 @@ if [[ ! $REPLY =~ ^[SsYy]$ ]]; then
     echo -e "${BLUE}📝 Abriendo Xcode para configurar el Team...${NC}"
     echo ""
     echo "En Xcode:"
-    echo "  1. Selecciona el proyecto 'PrinterApp' (icono azul)"
-    echo "  2. Selecciona el target 'PrinterApp'"
+    echo "  1. Selecciona el proyecto 'lecrepe-app' (icono azul)"
+    echo "  2. Selecciona el target 'lecrepe-app'"
     echo "  3. Ve a la pestaña 'Signing & Capabilities'"
     echo "  4. Marca 'Automatically manage signing'"
     echo "  5. Selecciona tu Team en el menú desplegable"
@@ -80,8 +80,8 @@ echo "Esto puede tardar varios minutos..."
 echo ""
 
 xcodebuild archive \
-    -workspace PrinterApp.xcworkspace \
-    -scheme PrinterApp \
+    -workspace lecrepe-app.xcworkspace \
+    -scheme lecrepe-app \
     -configuration Release \
     -archivePath "$ARCHIVE_PATH" \
     -allowProvisioningUpdates \

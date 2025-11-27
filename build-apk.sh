@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Script para generar APK de Android para PrinterApp
+# Script para generar APK de Android para lecrepe-app
 # Uso: ./build-apk.sh [debug|release]
 
 set -e

@@ -6,7 +6,7 @@ echo "📱 Agregando logo de Kokoro como icono de la app..."
 echo ""
 
 # Directorio de iconos
-ICON_DIR="ios/PrinterApp/Images.xcassets/AppIcon.appiconset"
+ICON_DIR="ios/lecrepe-app/Images.xcassets/AppIcon.appiconset"
 
 # Verificar si existe el archivo del logo
 if [ ! -f "logo-kokoro.png" ] && [ ! -f "logo-kokoro.jpg" ]; then
@@ -33,7 +33,7 @@ echo "✅ Logo encontrado: $LOGO_FILE"
 echo ""
 echo "Para agregar el logo como icono:"
 echo "1. Abre Xcode"
-echo "2. Navega a: ios/PrinterApp/Images.xcassets/AppIcon.appiconset"
+echo "2. Navega a: ios/lecrepe-app/Images.xcassets/AppIcon.appiconset"
 echo "3. Arrastra el logo a cada tamaño requerido"
 echo ""
 echo "O usa una herramienta online para generar todos los tamaños:"

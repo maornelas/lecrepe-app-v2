@@ -1,0 +1,4 @@
+/Users/marko/Code/lecrepe/lecrepe-app-v2/android/app/.cxx/RelWithDebInfo/192j65fl/arm64-v8a/CMakeFiles/_CMakeLTOTest-CXX/bin/CMakeFiles/foo.dir
+/Users/marko/Code/lecrepe/lecrepe-app-v2/android/app/.cxx/RelWithDebInfo/192j65fl/arm64-v8a/CMakeFiles/_CMakeLTOTest-CXX/bin/CMakeFiles/boo.dir
+/Users/marko/Code/lecrepe/lecrepe-app-v2/android/app/.cxx/RelWithDebInfo/192j65fl/arm64-v8a/CMakeFiles/_CMakeLTOTest-CXX/bin/CMakeFiles/edit_cache.dir
+/Users/marko/Code/lecrepe/lecrepe-app-v2/android/app/.cxx/RelWithDebInfo/192j65fl/arm64-v8a/CMakeFiles/_CMakeLTOTest-CXX/bin/CMakeFiles/rebuild_cache.dir
