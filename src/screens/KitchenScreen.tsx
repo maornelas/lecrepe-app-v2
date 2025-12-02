@@ -10,10 +10,21 @@ import {
   RefreshControl,
   Alert,
   Modal,
+  NativeModules,
+  Platform,
 } from 'react-native';
+import TcpSocket from 'react-native-tcp-socket';
 import { OrderLecrepeService } from '../services/orderLecrepeService';
 import { StorageService } from '../services/storageService';
+import { useBluetooth } from '../contexts/BluetoothContext';
 import { Order } from '../types';
+
+// Declaración de tipos para TextEncoder (disponible en React Native)
+declare const TextEncoder: {
+  new (): {
+    encode(input: string): Uint8Array;
+  };
+};
 
 interface KitchenScreenProps {
   navigation?: any;
@@ -26,6 +37,10 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({ navigation }) => {
   const [orderDetailOpen, setOrderDetailOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [isPrinting, setIsPrinting] = useState(false);
+  
+  // Usar contexto de Bluetooth
+  const { isBluetoothEnabled, bluetoothDevice, sendToBluetooth } = useBluetooth();
 
   useEffect(() => {
     loadOrders();
@@ -158,7 +173,7 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({ navigation }) => {
         return 'N/A';
       }
       return date.toLocaleTimeString('es-MX', { 
-        hour: '2-digit', 
+        hour: '2-digit',
         minute: '2-digit',
         hour12: true
       });
@@ -182,6 +197,267 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({ navigation }) => {
     // Calculate from items
     const items = order.items || order.products || [];
     return items.reduce((sum, item) => sum + ((item.type_price || 0) * (item.units || 0)), 0);
+  };
+
+  // Función helper para obtener el logo en formato ESC/POS
+  const getLogoEscPos = async (printerWidth: number): Promise<string> => {
+    try {
+      // Intentar usar el módulo nativo de iOS si está disponible
+      if (Platform.OS === 'ios' && NativeModules.ImageToEscPos) {
+        console.log('🖼️ Intentando cargar logo para iOS, ancho:', printerWidth);
+        const logoBase64 = await NativeModules.ImageToEscPos.convertImageToEscPos('', printerWidth);
+        console.log('✅ Logo cargado exitosamente, longitud base64:', logoBase64.length);
+        // Convertir base64 a string binario
+        const logoBinary = atob(logoBase64);
+        let logoString = '';
+        for (let i = 0; i < logoBinary.length; i++) {
+          logoString += logoBinary.charAt(i);
+        }
+        console.log('✅ Logo convertido a string binario, longitud:', logoString.length);
+        return logoString;
+      } else if (Platform.OS === 'android') {
+        console.log('⚠️ Android: Logo no soportado aún, continuando sin logo');
+      } else {
+        console.log('⚠️ Plataforma no soportada para logo:', Platform.OS);
+      }
+    } catch (error) {
+      console.error('❌ Error al cargar el logo:', error);
+    }
+    // Si no se puede cargar el logo, retornar string vacío
+    return '';
+  };
+
+  const handlePrintOrder = async () => {
+    if (!selectedOrder) {
+      Alert.alert('Error', 'No hay orden seleccionada para imprimir');
+      return;
+    }
+
+    setIsPrinting(true);
+
+    try {
+      // Obtener configuración de la impresora (solo para WiFi)
+      const savedIP = await StorageService.getItem('printerIP');
+      const savedPort = await StorageService.getItem('printerPort');
+
+      const printerIP = savedIP || '192.168.1.26';
+      const printerPort = savedPort || '9100';
+
+      // Verificar configuración
+      if (!isBluetoothEnabled && (!printerIP || !printerPort)) {
+        Alert.alert('Error', 'Por favor configura la impresora en Configuración');
+        setIsPrinting(false);
+        return;
+      }
+
+      if (isBluetoothEnabled && !bluetoothDevice) {
+        Alert.alert('Error', 'Por favor conecta un dispositivo Bluetooth en Configuración');
+        setIsPrinting(false);
+        return;
+      }
+
+      // Constante para precio de para llevar
+      const TOGO_PRICE = 10;
+      // Ajustado para impresora de 58mm (32 caracteres por línea) o 80mm
+      const anchoCantidad = isBluetoothEnabled ? 4 : 6;
+      const anchoDescripcion = isBluetoothEnabled ? 18 : 28;
+      const anchoPrecio = isBluetoothEnabled ? 8 : 11;
+
+      // Función para remover acentos y caracteres especiales
+      const removeAccents = (str: string): string => {
+        return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+          .replace(/[ñÑ]/g, (match) => match === 'ñ' ? 'n' : 'N')
+          .replace(/[áÁ]/g, 'A')
+          .replace(/[éÉ]/g, 'E')
+          .replace(/[íÍ]/g, 'I')
+          .replace(/[óÓ]/g, 'O')
+          .replace(/[úÚ]/g, 'U');
+      };
+
+      // Comandos ESC/POS
+      const ESC = '\x1B';
+      const centerText = ESC + 'a' + '\x01';
+      const leftAlign = ESC + 'a' + '\x00';
+      const resetFormat = ESC + '@';
+      const lineFeed = '\n';
+      const smallSize = ESC + '!' + '\x00'; // Tamaño pequeño/normal
+      const normalSize = ESC + '!' + '\x00';
+
+      // Obtener el logo en formato ESC/POS
+      const printerWidth = isBluetoothEnabled ? 384 : 576; // 58mm: 384px, 80mm: 576px
+      const logoEscPos = await getLogoEscPos(printerWidth);
+
+      let salida = "";
+      let total = 0;
+      let totalParaLlevar = 0;
+
+      // Obtener items de la orden
+      const orderItems = selectedOrder.items || selectedOrder.products || [];
+
+      // Agrupar productos por categoría
+      const groupedProducts: { [key: string]: any[] } = {};
+      orderItems.forEach((item: any) => {
+        // Normalizar categoría: crepa/crepas -> crepas, bebida/bebidas -> bebidas
+        let category = item.type || 'otros';
+        if (category === 'crepa') category = 'crepas';
+        if (category === 'bebida') category = 'bebidas';
+        
+        if (!groupedProducts[category]) {
+          groupedProducts[category] = [];
+        }
+        groupedProducts[category].push(item);
+      });
+
+      // Procesar productos agrupados por categoría
+      const categoryOrder = ['crepas', 'bebidas', 'otros'];
+      categoryOrder.forEach(category => {
+        if (!groupedProducts[category] || groupedProducts[category].length === 0) return;
+
+        // Agregar encabezado de categoría (sin acentos)
+        const categoryLabel = removeAccents(category.toUpperCase());
+        salida += `${categoryLabel}:${lineFeed}`;
+
+        // Procesar productos de esta categoría
+        groupedProducts[category].forEach((item: any) => {
+          // Alinear cantidad a la derecha
+          const cantidad = (item.units || 0).toString().padStart(anchoCantidad);
+          let productDesc = removeAccents(item.name || item.product_name || 'Sin nombre');
+          
+          // Agregar opción si existe (tamaño de bebida) - solo si no es "Regular" o si hay cambios
+          if (item.size && item.size !== 'Regular' && item.size !== 'regular') {
+            productDesc += ` ${removeAccents(item.size)}`;
+          }
+          
+          // Agregar ingredientes excluidos si existen (desde toppings)
+          if (item.toppings && Array.isArray(item.toppings)) {
+            const excludedToppings = item.toppings.filter((t: any) => t.selected === false);
+            if (excludedToppings.length > 0) {
+              productDesc += ` (sin ${excludedToppings.map((t: any) => removeAccents(t.name)).join(', ')})`;
+            }
+          }
+          
+          const descripcion = productDesc.substring(0, anchoDescripcion).padEnd(anchoDescripcion);
+          // El type_price del backend ya incluye el fee_togo si es para llevar
+          const itemPrice = item.type_price || item.price || 0;
+          const itemTotalPrice = itemPrice * (item.units || 0);
+          const precio = `$${itemTotalPrice.toFixed(2)}`.padStart(anchoPrecio);
+          salida += `${cantidad} ${descripcion}${precio}${lineFeed}`; // Espacio entre cantidad y descripción
+
+          // Calcular total del producto (el precio ya incluye fee_togo si aplica)
+          total += itemTotalPrice;
+        });
+      });
+
+      // El totalParaLlevar ya está incluido en el precio de cada item (type_price)
+      // No necesitamos calcularlo por separado porque ya está en el precio
+      totalParaLlevar = 0;
+
+      // Generar ticket
+      const separator = isBluetoothEnabled ? '--------------------------------' : '---------------------------------------------';
+      const orderName = removeAccents(selectedOrder.client?.name || selectedOrder.name || 'Cliente General');
+      const orderNameLine = isBluetoothEnabled 
+        ? `Nombre: ${orderName.length > 30 ? orderName.substring(0, 27) + '...' : orderName}\n`
+        : `Nombre Orden: ${orderName}\n`;
+      const headerLine = isBluetoothEnabled 
+        ? 'CANT DESCRIPCION      TOTAL\n'
+        : 'CANT   DESCRIPCION                  TOTAL\n';
+      
+      const fecha = removeAccents(new Date().toLocaleDateString());
+      // Formatear hora solo con horas y minutos (sin segundos ni símbolos extraños)
+      const now = new Date();
+      const hora = removeAccents(`${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`);
+      const mesaText = selectedOrder.togo ? 'PARA LLEVAR' : `MESA ${selectedOrder.id_place || ''}`;
+      
+      // Calcular ancho para alinear totales a la derecha
+      const anchoTotal = isBluetoothEnabled ? 32 : 45;
+      const subtotalLabel = 'SUBTOTAL:';
+      const paraLlevarLabel = 'PARA LLEVAR:';
+      const totalLabel = 'TOTAL A PAGAR:';
+      
+      const doubleSizeBold = ESC + '!' + '\x38'; // Doble tamaño y negritas
+      const ticketContent = resetFormat + smallSize + // Tamaño pequeño
+        (logoEscPos ? logoEscPos + lineFeed : '') + // Logo en la parte superior
+        centerText + doubleSizeBold + removeAccents('LECREPE') + smallSize + lineFeed + // Texto LECREPE grande
+        centerText + removeAccents('CD. MANUEL DOBLADO') + lineFeed +
+        removeAccents('Tel: 432-100-4990') + lineFeed +
+        leftAlign + separator + lineFeed +
+        `Fecha: ${fecha}  Hora: ${hora}` + lineFeed +
+        `Orden No: ${selectedOrder.id_order || 0}` + lineFeed +
+        mesaText + lineFeed +
+        orderNameLine + separator + lineFeed +
+        headerLine + separator + lineFeed +
+        salida + separator + lineFeed +
+        `${subtotalLabel}${' '.repeat(anchoTotal - subtotalLabel.length - total.toFixed(2).length - 1)}$${total.toFixed(2)}` + lineFeed +
+        (totalParaLlevar > 0 ? `${paraLlevarLabel}${' '.repeat(anchoTotal - paraLlevarLabel.length - totalParaLlevar.toFixed(2).length - 1)}$${totalParaLlevar.toFixed(2)}` + lineFeed : '') +
+        separator + lineFeed +
+        `${totalLabel}${' '.repeat(anchoTotal - totalLabel.length - (total+totalParaLlevar).toFixed(2).length - 1)}$${(total+totalParaLlevar).toFixed(2)}` + lineFeed +
+        separator + lineFeed +
+        centerText + removeAccents('GRACIAS POR TU COMPRA') + lineFeed +
+        removeAccents('VUELVE PRONTO :)') + lineFeed +
+        leftAlign + separator + lineFeed +
+        '\n'.repeat(isBluetoothEnabled ? 3 : 5) + // Menos espacios al final
+        resetFormat;
+
+      // Usar Bluetooth o TCP según la configuración
+      if (isBluetoothEnabled && bluetoothDevice) {
+        try {
+          await sendToBluetooth(ticketContent);
+          setIsPrinting(false);
+          Alert.alert('Éxito', `Orden #${selectedOrder.id_order || 0} enviada a impresora Bluetooth`);
+        } catch (error: any) {
+          setIsPrinting(false);
+          Alert.alert('Error', 'Error al enviar a impresora Bluetooth: ' + (error.message || 'Error desconocido'));
+        }
+      } else {
+        const client = TcpSocket.createConnection(
+          {
+            host: printerIP,
+            port: parseInt(printerPort, 10),
+          },
+          () => {
+            try {
+              const encoder = new TextEncoder();
+              const uint8Array = encoder.encode(ticketContent);
+              client.write(uint8Array as any);
+              
+              setTimeout(() => {
+                client.destroy();
+                setIsPrinting(false);
+                Alert.alert('Éxito', `Orden #${selectedOrder.id_order || 0} enviada a impresora`);
+              }, 500);
+            } catch (error: any) {
+              client.destroy();
+              setIsPrinting(false);
+              Alert.alert('Error', 'Error al enviar datos: ' + error.message);
+            }
+          }
+        );
+
+        client.on('error', (error: any) => {
+          client.destroy();
+          setIsPrinting(false);
+          Alert.alert(
+            'Error de conexión',
+            'No se pudo conectar a la impresora.\n\nVerifica:\n- IP correcta: ' + printerIP + '\n- Puerto: ' + printerPort + '\n- Que la tablet esté en la misma red WiFi'
+          );
+        });
+
+        client.on('close', () => {
+          setIsPrinting(false);
+        });
+
+        setTimeout(() => {
+          if (client && !client.destroyed) {
+            client.destroy();
+            setIsPrinting(false);
+            Alert.alert('Timeout', 'La impresora no respondió. Verifica la conexión.');
+          }
+        }, 10000);
+      }
+    } catch (error: any) {
+      setIsPrinting(false);
+      Alert.alert('Error', 'Error al imprimir: ' + (error.message || 'Error desconocido'));
+    }
   };
 
   const getStatusColor = (status: string): string => {
@@ -218,14 +494,14 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({ navigation }) => {
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => navigation?.goBack()}
-          >
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => navigation?.goBack()}
+        >
             <Text style={styles.backButtonIcon}>←</Text>
-          </TouchableOpacity>
+        </TouchableOpacity>
           <Text style={styles.headerIcon}>🍴</Text>
-          <Text style={styles.title}>COCINA</Text>
+        <Text style={styles.title}>COCINA</Text>
         </View>
         <View style={styles.headerRight}>
           <View style={styles.badgeContainer}>
@@ -238,46 +514,46 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({ navigation }) => {
       {/* Tabs */}
       <View style={styles.tabsContainer}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 0 && styles.tabActive]}
-            onPress={() => setActiveTab(0)}
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 0 && styles.tabActive]}
+          onPress={() => setActiveTab(0)}
+        >
+          <Text
+            style={[styles.tabText, activeTab === 0 && styles.tabTextActive]}
           >
-            <Text
-              style={[styles.tabText, activeTab === 0 && styles.tabTextActive]}
-            >
               Pend. ({getPendingOrders().length})
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 1 && styles.tabActive]}
-            onPress={() => setActiveTab(1)}
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 1 && styles.tabActive]}
+          onPress={() => setActiveTab(1)}
+        >
+          <Text
+            style={[styles.tabText, activeTab === 1 && styles.tabTextActive]}
           >
-            <Text
-              style={[styles.tabText, activeTab === 1 && styles.tabTextActive]}
-            >
-              Listas ({getReadyOrders().length})
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 2 && styles.tabActive]}
-            onPress={() => setActiveTab(2)}
+            Listas ({getReadyOrders().length})
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 2 && styles.tabActive]}
+          onPress={() => setActiveTab(2)}
+        >
+          <Text
+            style={[styles.tabText, activeTab === 2 && styles.tabTextActive]}
           >
-            <Text
-              style={[styles.tabText, activeTab === 2 && styles.tabTextActive]}
-            >
-              Cerradas ({getClosedOrders().length})
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 3 && styles.tabActive]}
-            onPress={() => setActiveTab(3)}
+            Cerradas ({getClosedOrders().length})
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 3 && styles.tabActive]}
+          onPress={() => setActiveTab(3)}
+        >
+          <Text
+            style={[styles.tabText, activeTab === 3 && styles.tabTextActive]}
           >
-            <Text
-              style={[styles.tabText, activeTab === 3 && styles.tabTextActive]}
-            >
               Cancel. ({getCanceledOrders().length})
-            </Text>
-          </TouchableOpacity>
+          </Text>
+        </TouchableOpacity>
         </ScrollView>
       </View>
 
@@ -300,14 +576,14 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({ navigation }) => {
               const totalAmount = getTotalAmount(order);
               
               return (
-                <TouchableOpacity
-                  key={order._id || order.id_order}
-                  style={[
-                    styles.orderCard,
+              <TouchableOpacity
+                key={order._id || order.id_order}
+                style={[
+                  styles.orderCard,
                     { borderColor: statusColor }
-                  ]}
-                  onPress={() => handleOrderClick(order)}
-                >
+                ]}
+                onPress={() => handleOrderClick(order)}
+              >
                   {/* Header with status and order type */}
                   <View style={[styles.orderCardHeader, { backgroundColor: statusColor }]}>
                     <View style={styles.orderHeaderLeft}>
@@ -315,9 +591,9 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({ navigation }) => {
                         {order.status === 'Pendiente' ? '⏰' : 
                          order.status === 'Lista' ? '✓' : 
                          order.status === 'Cancelada' ? '✕' : '✓'}
-                      </Text>
+                  </Text>
                       <Text style={styles.orderNumberHeader}>#{order.id_order}</Text>
-                    </View>
+                </View>
                     <View style={[styles.orderTypeBadge, order.togo && styles.togoBadgeHeader]}>
                       <Text style={styles.orderTypeIcon}>{order.togo ? '📋' : '🪑'}</Text>
                       <Text style={[styles.orderTypeText, order.togo && styles.togoTextHeader]}>
@@ -329,11 +605,11 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({ navigation }) => {
                   {/* Order details */}
                   <View style={styles.orderCardContent}>
                     <View style={styles.orderInfoRow}>
-                      <Text style={styles.orderName}>
-                        {order.client?.name || order.name || 'Cliente General'}
-                      </Text>
+                <Text style={styles.orderName}>
+                  {order.client?.name || order.name || 'Cliente General'}
+                </Text>
                       <Text style={styles.itemsCount}>{itemsCount} items</Text>
-                    </View>
+                  </View>
                     
                     <Text style={styles.orderTime}>
                       {formatTime(order.creation_date || order.date)}
@@ -342,12 +618,12 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({ navigation }) => {
                     <Text style={styles.orderTotal}>
                       ${totalAmount.toFixed(2)}
                     </Text>
-                  </View>
+                </View>
 
                   {/* Action buttons */}
-                  <View style={styles.orderActions}>
-                    {order.status === 'Pendiente' && (
-                      <TouchableOpacity
+                <View style={styles.orderActions}>
+                  {order.status === 'Pendiente' && (
+                    <TouchableOpacity
                         style={[styles.actionButton, styles.actionButtonLista]}
                         onPress={(e) => {
                           e.stopPropagation();
@@ -355,10 +631,10 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({ navigation }) => {
                         }}
                       >
                         <Text style={styles.actionButtonText}>LISTA</Text>
-                      </TouchableOpacity>
-                    )}
-                    {order.status === 'Lista' && (
-                      <TouchableOpacity
+                    </TouchableOpacity>
+                  )}
+                  {order.status === 'Lista' && (
+                    <TouchableOpacity
                         style={[styles.actionButton, styles.actionButtonCerrar]}
                         onPress={(e) => {
                           e.stopPropagation();
@@ -379,10 +655,10 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({ navigation }) => {
                         }}
                       >
                         <Text style={styles.actionButtonCancelText}>CANCELAR</Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                </TouchableOpacity>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </TouchableOpacity>
               );
             })}
           </View>
@@ -399,44 +675,66 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({ navigation }) => {
         <SafeAreaView style={styles.modalFullScreen}>
           <View style={styles.modalContentFullScreen}>
             <View style={styles.modalHeader}>
-              <View style={styles.modalHeaderLeft}>
-                <Text style={styles.modalHeaderIcon}>
-                  {selectedOrder?.togo ? '📋' : '🪑'}
-                </Text>
-                <View style={[styles.modalHeaderInfo, { marginLeft: 8 }]}>
-                  <Text style={styles.modalHeaderLabel}>Lugar</Text>
-                  <Text style={styles.modalHeaderValue}>
-                    {selectedOrder?.togo ? 'Para llevar' : `Mesa ${selectedOrder?.id_place || ''}`}
-                  </Text>
+              {/* Primera fila: Información de la orden */}
+              <View style={styles.modalHeaderRow}>
+                <View style={styles.modalHeaderLeft}>
+                  <Text style={styles.modalHeaderIcon}>
+                    {selectedOrder?.togo ? '📋' : '🪑'}
+              </Text>
+                  <View style={[styles.modalHeaderInfo, { marginLeft: 8 }]}>
+                    <Text style={styles.modalHeaderLabel}>Lugar</Text>
+                    <Text style={styles.modalHeaderValue}>
+                      {selectedOrder?.togo ? 'Para llevar' : `Mesa ${selectedOrder?.id_place || ''}`}
+                    </Text>
+                  </View>
+                  <View style={[styles.modalHeaderInfo, { marginLeft: 12 }]}>
+                    <Text style={styles.modalHeaderLabel}>Orden</Text>
+                    <Text style={[styles.modalHeaderValue, styles.modalOrderNumber]}>
+                      #{selectedOrder?.id_order}
+                    </Text>
+                  </View>
+                  <View style={[styles.modalHeaderInfo, { marginLeft: 12 }]}>
+                    <Text style={styles.modalHeaderLabel}>Total</Text>
+                    <Text style={[styles.modalHeaderValue, styles.modalTotal]}>
+                      ${getTotalAmount(selectedOrder || {}).toFixed(2)}
+                    </Text>
+                  </View>
                 </View>
-                <View style={[styles.modalHeaderInfo, { marginLeft: 12 }]}>
-                  <Text style={styles.modalHeaderLabel}>Orden</Text>
-                  <Text style={[styles.modalHeaderValue, styles.modalOrderNumber]}>
-                    #{selectedOrder?.id_order}
-                  </Text>
-                </View>
-                <View style={[styles.modalHeaderInfo, { marginLeft: 12 }]}>
-                  <Text style={styles.modalHeaderLabel}>Total</Text>
-                  <Text style={[styles.modalHeaderValue, styles.modalTotal]}>
-                    ${getTotalAmount(selectedOrder || {}).toFixed(2)}
-                  </Text>
-                </View>
-              </View>
               <TouchableOpacity
                 style={styles.closeButton}
                 onPress={() => setOrderDetailOpen(false)}
               >
                 <Text style={styles.closeButtonText}>✕</Text>
               </TouchableOpacity>
+              </View>
+              
+              {/* Segunda fila: Botón de imprimir */}
+              <View style={[styles.modalHeaderRow, { justifyContent: 'flex-start' }]}>
+                <TouchableOpacity
+                  style={[
+                    styles.printButtonHeader,
+                    isPrinting && styles.printButtonHeaderDisabled,
+                  ]}
+                  onPress={handlePrintOrder}
+                  disabled={isPrinting}
+                >
+                  {isPrinting ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <Text style={styles.printButtonHeaderText}>IMPRIMIR</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
             </View>
             {selectedOrder && (
-              <ScrollView style={styles.modalBody} contentContainerStyle={styles.modalBodyContent}>
-                <Text style={styles.modalClientName}>
-                  Nombre: {selectedOrder.client?.name || selectedOrder.name || 'Cliente General'}
+              <>
+                <ScrollView style={styles.modalBody} contentContainerStyle={styles.modalBodyContent}>
+                  <Text style={styles.modalClientName}>
+                    Nombre: {selectedOrder.client?.name || selectedOrder.name || 'Cliente General'}
                 </Text>
-                
-                {/* Two columns: Bebidas and Crepas */}
-                <View style={styles.productsContainer}>
+                  
+                  {/* Two columns: Bebidas and Crepas */}
+                  <View style={styles.productsContainer}>
                   {/* Bebidas Column */}
                   <View style={[styles.productsColumn, { marginRight: 6 }]}>
                     <Text style={styles.productsColumnTitle}>BEBIDAS</Text>
@@ -456,6 +754,10 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({ navigation }) => {
                       return drinks.map((item: any, index: number) => {
                         const itemName = item.name || item.product_name || 'Sin nombre';
                         const itemUnits = item.units || 0;
+                        // Obtener ingredientes excluidos desde toppings
+                        const excludedToppings = item.toppings && Array.isArray(item.toppings) 
+                          ? item.toppings.filter((t: any) => t.selected === false)
+                          : [];
                         
                         return (
                           <View key={index} style={styles.productListItem}>
@@ -465,10 +767,15 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({ navigation }) => {
                               </View>
                               <View style={styles.productInfo}>
                                 <Text style={styles.productListItemName}>{itemName}</Text>
+                                {excludedToppings.length > 0 && (
+                                  <Text style={styles.toppingsText}>
+                                    sin {excludedToppings.map((t: any) => t.name).join(', ')}
+                                  </Text>
+                                )}
                                 <Text style={styles.productListItemQuantity}>
                                   cant: <Text style={styles.productListItemQuantityBold}>{itemUnits}</Text>
-                                </Text>
-                              </View>
+                    </Text>
+                  </View>
                             </View>
                           </View>
                         );
@@ -495,6 +802,10 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({ navigation }) => {
                       return crepes.map((item: any, index: number) => {
                         const itemName = item.name || item.product_name || 'Sin nombre';
                         const itemUnits = item.units || 0;
+                        // Obtener ingredientes excluidos desde toppings
+                        const excludedToppings = item.toppings && Array.isArray(item.toppings) 
+                          ? item.toppings.filter((t: any) => t.selected === false)
+                          : [];
                         
                         return (
                           <View key={index} style={styles.productListItem}>
@@ -504,10 +815,15 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({ navigation }) => {
                               </View>
                               <View style={styles.productInfo}>
                                 <Text style={styles.productListItemName}>{itemName}</Text>
+                                {excludedToppings.length > 0 && (
+                                  <Text style={styles.toppingsText}>
+                                    sin {excludedToppings.map((t: any) => t.name).join(', ')}
+                                  </Text>
+                                )}
                                 <Text style={styles.productListItemQuantity}>
                                   cant: <Text style={styles.productListItemQuantityBold}>{itemUnits}</Text>
-                                </Text>
-                              </View>
+                    </Text>
+                  </View>
                             </View>
                           </View>
                         );
@@ -516,6 +832,7 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({ navigation }) => {
                   </View>
                 </View>
               </ScrollView>
+              </>
             )}
           </View>
         </SafeAreaView>
@@ -780,13 +1097,16 @@ const styles = StyleSheet.create({
     maxHeight: '80%',
   },
   modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
     padding: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
     backgroundColor: '#f5f5f5',
+  },
+  modalHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
   },
   modalHeaderLeft: {
     flexDirection: 'row',
@@ -951,6 +1271,24 @@ const styles = StyleSheet.create({
     color: '#666',
     marginTop: 2,
     fontStyle: 'italic',
+  },
+  printButtonHeader: {
+    backgroundColor: '#FF9800',
+    paddingVertical: 10,
+    paddingHorizontal: 24,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'flex-start',
+  },
+  printButtonHeaderDisabled: {
+    backgroundColor: '#ccc',
+    opacity: 0.6,
+  },
+  printButtonHeaderText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
   },
 });
 

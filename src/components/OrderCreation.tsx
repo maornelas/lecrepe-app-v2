@@ -10,6 +10,8 @@ import {
   ActivityIndicator,
   Alert,
   Dimensions,
+  NativeModules,
+  Platform,
 } from 'react-native';
 import TcpSocket from 'react-native-tcp-socket';
 import RNBluetoothClassic, { BluetoothDevice } from 'react-native-bluetooth-classic';
@@ -115,11 +117,15 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
       loadProducts();
       if (!isEditMode || !editingOrder) {
         resetOrder();
+        // Si es una orden de mesa (no para llevar), inicializar con el nombre de la mesa
+        if (!isTakeout && tableInfo.mesa && tableInfo.mesa !== 'PARA LLEVAR' && tableInfo.mesa !== 'NUEVA ORDEN') {
+          setOrderName(String(tableInfo.mesa));
+        }
       }
     } else {
       setIsCartExpanded(false);
     }
-  }, [isOpen, isEditMode, editingOrder]);
+  }, [isOpen, isEditMode, editingOrder, isTakeout, tableInfo]);
   
   useEffect(() => {
     // Actualizar subcategoría cuando cambian los datos
@@ -274,16 +280,23 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
     if (editingOrder) {
       setOrderName(editingOrder.name || '');
       const items: OrderItem[] = (editingOrder.items || editingOrder.products || []).map(
-        (item, index) => ({
-          id: item._id || `item_${index}`,
-          name: item.product_name || item.name || '',
-          price: item.type_price || 0,
-          quantity: item.units || 1,
-          category: item.type || 'crepa',
-          option: item.size || 'Regular',
-          selectedIngredients: item.toppings?.map((t: any) => t.name) || [],
-          takeoutFee: isTakeout && (item.type === 'crepa') ? 5 : 0,
-        })
+        (item, index) => {
+          // El type_price del backend ya incluye el fee_togo si es para llevar
+          // No necesitamos sumar takeoutFee porque ya está incluido en type_price
+          const itemPrice = item.type_price || 0;
+          return {
+            id: item._id || `item_${index}`,
+            name: item.product_name || item.name || '',
+            price: itemPrice, // Ya incluye fee_togo si aplica
+            quantity: (item.units && item.units > 0) ? item.units : 1, // Asegurar que siempre haya al menos 1 unidad
+            category: item.type || 'crepa',
+            option: item.size || 'Regular',
+            selectedIngredients: item.toppings?.filter((t: any) => t.selected !== false).map((t: any) => t.name) || [],
+            excludedIngredients: item.toppings?.filter((t: any) => t.selected === false).map((t: any) => t.name) || [],
+            takeoutFee: 0, // Ya está incluido en el precio
+            fee_togo: 0, // Ya está incluido en el precio
+          };
+        }
       );
       setOrderItems(items);
     }
@@ -448,9 +461,10 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
   };
 
   const getTotal = (): number => {
+    // El precio del item ya incluye el takeoutFee si es para llevar
+    // No necesitamos sumarlo por separado
     return orderItems.reduce((total, item) => {
-      const itemPrice = item.price + (item.takeoutFee || 0);
-      return total + itemPrice * item.quantity;
+      return total + (item.price * item.quantity);
     }, 0);
   };
 
@@ -471,11 +485,21 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
         return;
       }
 
-      // Calcular total incluyendo para llevar
+      // Calcular total (ya incluye takeoutFee porque item.price ya lo incluye)
       const total = getTotal();
+      const finalTotal = total; // Ya no necesitamos sumar totalParaLlevar por separado
+
+      // Calcular cantidad de crepas para service_charge
       const crepasCount = orderItems.filter(item => item.category === 'crepa').reduce((sum, item) => sum + item.quantity, 0);
-      const totalParaLlevar = isTakeout ? crepasCount * 10 : 0; // TOGO_PRICE = 10
-      const finalTotal = total + totalParaLlevar;
+
+      // Determinar el nombre del cliente y de la orden
+      // Si es una orden de mesa (no para llevar), usar el nombre de la mesa
+      const clientName = !isTakeout && tableInfo.mesa && tableInfo.mesa !== 'PARA LLEVAR' && tableInfo.mesa !== 'NUEVA ORDEN'
+        ? tableInfo.mesa
+        : (orderName || 'Cliente General');
+      const orderNameFinal = !isTakeout && tableInfo.mesa && tableInfo.mesa !== 'PARA LLEVAR' && tableInfo.mesa !== 'NUEVA ORDEN'
+        ? tableInfo.mesa
+        : (orderName || `Orden ${tableInfo.orden}`);
 
       // Preparar datos de la orden similar a lecrepe-front
       const orderData: any = {
@@ -484,7 +508,7 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
         togo: isTakeout,
         status: isEditMode && editingOrder ? editingOrder.status : 'Pendiente',
         client: {
-          name: orderName || 'Cliente General',
+          name: clientName,
           phone: (editingOrder?.client as any)?.phone || '',
           email: (editingOrder?.client as any)?.email || '',
         },
@@ -493,23 +517,46 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
           amount: finalTotal,
           url_ticket: (editingOrder?.payment as any)?.url_ticket || '',
         },
-        items: orderItems.map((item) => ({
-          type: item.category || (activeTab === 0 ? 'crepa' : 'bebida'),
-          name: item.name,
-          size: item.option || 'Regular',
-          price: item.price + (item.takeoutFee || 0), // Incluir takeoutFee en el precio
-          units: item.quantity,
-          toppings: item.selectedIngredients ? item.selectedIngredients.map((ingredient) => ({
-            name: ingredient,
-            price: 0,
-            selected: true,
-          })) : [],
-          comments: '',
-          url: '',
-        })),
+        items: orderItems.map((item) => {
+          // Combinar ingredientes seleccionados y excluidos en toppings
+          const toppings: any[] = [];
+          
+          // Agregar ingredientes seleccionados
+          if (item.selectedIngredients && item.selectedIngredients.length > 0) {
+            item.selectedIngredients.forEach((ingredient) => {
+              toppings.push({
+                name: ingredient,
+                price: 0,
+                selected: true,
+              });
+            });
+          }
+          
+          // Agregar ingredientes excluidos
+          if (item.excludedIngredients && item.excludedIngredients.length > 0) {
+            item.excludedIngredients.forEach((ingredient) => {
+              toppings.push({
+                name: ingredient,
+                price: 0,
+                selected: false,
+              });
+            });
+          }
+          
+          return {
+            type: item.category || (activeTab === 0 ? 'crepa' : 'bebida'),
+            name: item.name,
+            size: item.option || 'Regular',
+            price: item.price + (item.takeoutFee || 0), // Incluir takeoutFee en el precio
+            units: item.quantity || 1, // Asegurar que siempre haya al menos 1 unidad
+            toppings: toppings,
+            comments: '',
+            url: '',
+          };
+        }),
         attended_by: (editingOrder as any)?.attended_by || 'Sistema',
         comments: (editingOrder as any)?.comments || '',
-        name: orderName || `Orden ${tableInfo.orden}`,
+        name: orderNameFinal,
         products: orderItems, // Mantener productos originales
         date: isEditMode && editingOrder ? editingOrder.date : new Date().toISOString(),
         total: finalTotal,
@@ -520,7 +567,12 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
 
       if (isEditMode && onSave && editingOrder) {
         // Modo edición: llamar a onSave
-        await onSave(orderData);
+        // Asegurarse de incluir id_order en orderData para que el backend lo reconozca
+        const orderDataWithId = {
+          ...orderData,
+          id_order: editingOrder.id_order || editingOrder._id || (editingOrder as any).id,
+        };
+        await onSave(orderDataWithId);
         Alert.alert('Éxito', 'Orden actualizada exitosamente');
         resetOrder();
         onClose();
@@ -566,6 +618,34 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
     }
   };
 
+  // Función helper para obtener el logo en formato ESC/POS
+  const getLogoEscPos = async (printerWidth: number): Promise<string> => {
+    try {
+      // Intentar usar el módulo nativo de iOS si está disponible
+      if (Platform.OS === 'ios' && NativeModules.ImageToEscPos) {
+        console.log('🖼️ Intentando cargar logo para iOS, ancho:', printerWidth);
+        const logoBase64 = await NativeModules.ImageToEscPos.convertImageToEscPos('', printerWidth);
+        console.log('✅ Logo cargado exitosamente, longitud base64:', logoBase64.length);
+        // Convertir base64 a string binario
+        const logoBinary = atob(logoBase64);
+        let logoString = '';
+        for (let i = 0; i < logoBinary.length; i++) {
+          logoString += logoBinary.charAt(i);
+        }
+        console.log('✅ Logo convertido a string binario, longitud:', logoString.length);
+        return logoString;
+      } else if (Platform.OS === 'android') {
+        console.log('⚠️ Android: Logo no soportado aún, continuando sin logo');
+      } else {
+        console.log('⚠️ Plataforma no soportada para logo:', Platform.OS);
+      }
+    } catch (error) {
+      console.error('❌ Error al cargar el logo:', error);
+    }
+    // Si no se puede cargar el logo, retornar string vacío
+    return '';
+  };
+
   const handlePrintOrder = async () => {
     if (orderItems.length === 0) {
       Alert.alert('Aviso', 'No hay items en la orden para imprimir');
@@ -603,99 +683,141 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
       const anchoDescripcion = isBluetoothEnabled ? 18 : 28; // Ancho para descripción (58mm: 18, 80mm: 28)
       const anchoPrecio = isBluetoothEnabled ? 8 : 11; // Ancho para precio (58mm: 8, 80mm: 11)
 
+      // Función para remover acentos y caracteres especiales
+      const removeAccents = (str: string): string => {
+        return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+          .replace(/[ñÑ]/g, (match) => match === 'ñ' ? 'n' : 'N')
+          .replace(/[áÁ]/g, 'A')
+          .replace(/[éÉ]/g, 'E')
+          .replace(/[íÍ]/g, 'I')
+          .replace(/[óÓ]/g, 'O')
+          .replace(/[úÚ]/g, 'U');
+      };
+
       // Comandos ESC/POS
       const ESC = '\x1B';
       const centerText = ESC + 'a' + '\x01'; // Centrar
       const leftAlign = ESC + 'a' + '\x00'; // Izquierda
       const resetFormat = ESC + '@'; // Reset
       const lineFeed = '\n';
-      const doubleSizeBold = ESC + '!' + '\x38'; // Doble tamaño y negritas
+      const smallSize = ESC + '!' + '\x00'; // Tamaño pequeño/normal
       const normalSize = ESC + '!' + '\x00'; // Tamaño normal
 
-      // Generar encabezado
-      const header = resetFormat + centerText + 
-                     doubleSizeBold + 'LECREPE' + normalSize;
+      // Obtener el logo en formato ESC/POS
+      const printerWidth = isBluetoothEnabled ? 384 : 576; // 58mm: 384px, 80mm: 576px
+      const logoEscPos = await getLogoEscPos(printerWidth);
 
       let salida = "";
       let total = 0;
       let totalParaLlevar = 0;
 
-      // Procesar productos
+      // Agrupar productos por categoría
+      const groupedProducts: { [key: string]: typeof orderItems } = {};
       orderItems.forEach(item => {
-        const cantidad = item.quantity.toString().padEnd(anchoCantidad);
-        let productDesc = item.name;
+        // Normalizar categoría: crepa/crepas -> crepas, bebida/bebidas -> bebidas
+        let category = item.category || 'otros';
+        if (category === 'crepa') category = 'crepas';
+        if (category === 'bebida') category = 'bebidas';
         
-        // Agregar opción si existe (tamaño de bebida)
-        if (item.option) {
-          productDesc += ` ${item.option}`;
+        if (!groupedProducts[category]) {
+          groupedProducts[category] = [];
         }
-        
-        // Agregar ingredientes excluidos si existen
-        if (item.excludedIngredients && item.excludedIngredients.length > 0) {
-          productDesc += ` (sin ${item.excludedIngredients.join(', ')})`;
-        }
-        
-        // Agregar frutas seleccionadas si existen
-        if (item.selectedFruits && item.selectedFruits.length > 0) {
-          productDesc += ` (${item.selectedFruits.join(', ')})`;
-        }
-        
-        const descripcion = productDesc.substring(0, anchoDescripcion).padEnd(anchoDescripcion);
-        const precio = `$${(item.price * item.quantity).toFixed(2)}`.padStart(anchoPrecio);
-        salida += `${cantidad}${descripcion}${precio}${lineFeed}`;
-
-        // Calcular total del producto
-        total += item.price * item.quantity;
-
-        // Calcular para llevar si es crepa
-        if (isTakeout && item.category === 'crepa' && item.takeoutFee) {
-          totalParaLlevar += item.takeoutFee * item.quantity;
-        }
+        groupedProducts[category].push(item);
       });
 
-      // Si no se calculó para llevar por item, calcular por cantidad de crepas
-      if (isTakeout && totalParaLlevar === 0) {
-        const crepasCount = orderItems.filter(item => item.category === 'crepa').reduce((sum, item) => sum + item.quantity, 0);
-        totalParaLlevar = crepasCount * TOGO_PRICE;
-      }
+      // Procesar productos agrupados por categoría
+      const categoryOrder = ['crepas', 'bebidas', 'otros'];
+      categoryOrder.forEach(category => {
+        if (!groupedProducts[category] || groupedProducts[category].length === 0) return;
+
+        // Agregar encabezado de categoría (sin acentos)
+        const categoryLabel = removeAccents(category.toUpperCase());
+        salida += `${categoryLabel}:${lineFeed}`;
+
+        // Procesar productos de esta categoría
+        groupedProducts[category].forEach(item => {
+          // Alinear cantidad a la derecha - asegurar que siempre haya al menos 1
+          const itemQuantity = (item.quantity && item.quantity > 0) ? item.quantity : 1;
+          const cantidad = itemQuantity.toString().padStart(anchoCantidad);
+          let productDesc = removeAccents(item.name);
+          
+          // Agregar opción si existe (tamaño de bebida) - solo si no es "Regular" o si hay cambios
+          if (item.option && item.option !== 'Regular' && item.option !== 'regular') {
+            productDesc += ` ${removeAccents(item.option)}`;
+          }
+          
+          // Agregar ingredientes excluidos si existen
+          if (item.excludedIngredients && item.excludedIngredients.length > 0) {
+            productDesc += ` (sin ${item.excludedIngredients.map(ing => removeAccents(ing)).join(', ')})`;
+          }
+          
+          // Agregar frutas seleccionadas si existen
+          if (item.selectedFruits && item.selectedFruits.length > 0) {
+            productDesc += ` (${item.selectedFruits.map(fruit => removeAccents(fruit)).join(', ')})`;
+          }
+          
+          const descripcion = productDesc.substring(0, anchoDescripcion).padEnd(anchoDescripcion);
+          // El precio del item ya incluye el takeoutFee si es para llevar
+          // item.price ya incluye takeoutFee cuando se guarda la orden
+          const itemTotalPrice = item.price * itemQuantity;
+          const precio = `$${itemTotalPrice.toFixed(2)}`.padStart(anchoPrecio);
+          salida += `${cantidad} ${descripcion}${precio}${lineFeed}`; // Espacio entre cantidad y descripción
+
+          // Calcular total del producto (el precio ya incluye takeoutFee si aplica)
+          total += itemTotalPrice;
+        });
+      });
+
+      // El totalParaLlevar ya está incluido en el precio de cada item
+      // No necesitamos calcularlo por separado porque ya está en item.price
+      // Si el backend devuelve un totalParaLlevar separado, lo usamos, sino es 0
+      totalParaLlevar = 0;
 
       // Generar ticket - Ajustado para 58mm o 80mm según el tipo de conexión
       const separator = isBluetoothEnabled ? '--------------------------------' : '---------------------------------------------';
+      const orderName = removeAccents(orderName || 'Cliente General');
       const orderNameLine = isBluetoothEnabled 
-        ? `Nombre: ${orderName.length > 30 ? orderName.substring(0, 27) + '...' : orderName || 'Cliente General'}\n`
-        : `Nombre Orden: ${orderName || 'Cliente General'}\n`;
+        ? `Nombre: ${orderName.length > 30 ? orderName.substring(0, 27) + '...' : orderName}\n`
+        : `Nombre Orden: ${orderName}\n`;
       const headerLine = isBluetoothEnabled 
         ? 'CANT DESCRIPCION      TOTAL\n'
         : 'CANT   DESCRIPCION                  TOTAL\n';
       
-      const ticketContent = resetFormat + 
-        header + lineFeed + // LECREPE en grande y negritas
-        centerText + `
--- LECREPE  --
-CD. MANUEL DOBLADO
-Tel: 432-100-4990
-` + leftAlign + `
-${separator}
-Fecha: ${new Date().toLocaleDateString()}  
-Hora: ${new Date().toLocaleTimeString()}
-Orden No: ${tableInfo?.orden || 0}
-${isTakeout ? 'PARA LLEVAR' : `MESA ${tableInfo?.mesa || ''}`}
-${orderNameLine}${separator}
-${headerLine}${separator}
-${salida}
-${separator}
-SUBTOTAL:            ${isBluetoothEnabled ? '' : '\t\t'}$${total.toFixed(2)}
-${totalParaLlevar > 0 ? `PARA LLEVAR:         ${isBluetoothEnabled ? '' : '\t\t'}$${totalParaLlevar.toFixed(2)}\n` : ''}${separator}
-TOTAL A PAGAR:        ${isBluetoothEnabled ? '' : '\t\t'}$${(total+totalParaLlevar).toFixed(2)}
-${separator}
-` + centerText + `
-        GRACIAS POR TU COMPRA
-        VUELVE PRONTO :)
-` + leftAlign + `
-${separator}
-
-${'\n'.repeat(isBluetoothEnabled ? 5 : 10)}
-` + resetFormat;
+      const fecha = removeAccents(new Date().toLocaleDateString());
+      // Formatear hora solo con horas y minutos (sin segundos ni símbolos extraños)
+      const now = new Date();
+      const hora = removeAccents(`${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`);
+      const mesaText = isTakeout ? 'PARA LLEVAR' : `MESA ${tableInfo?.mesa || ''}`;
+      
+      // Calcular ancho para alinear totales a la derecha
+      const anchoTotal = isBluetoothEnabled ? 32 : 45;
+      const subtotalLabel = 'SUBTOTAL:';
+      const paraLlevarLabel = 'PARA LLEVAR:';
+      const totalLabel = 'TOTAL A PAGAR:';
+      
+      const doubleSizeBold = ESC + '!' + '\x38'; // Doble tamaño y negritas
+      const ticketContent = resetFormat + smallSize + // Tamaño pequeño
+        (logoEscPos ? logoEscPos + lineFeed : '') + // Logo en la parte superior
+        centerText + doubleSizeBold + removeAccents('LECREPE') + smallSize + lineFeed + // Texto LECREPE grande
+        centerText + removeAccents('CD. MANUEL DOBLADO') + lineFeed +
+        removeAccents('Tel: 432-100-4990') + lineFeed +
+        leftAlign + separator + lineFeed +
+        `Fecha: ${fecha}  Hora: ${hora}` + lineFeed +
+        `Orden No: ${tableInfo?.orden || 0}` + lineFeed +
+        mesaText + lineFeed +
+        orderNameLine + separator + lineFeed +
+        headerLine + separator + lineFeed +
+        salida + separator + lineFeed +
+        `${subtotalLabel}${' '.repeat(anchoTotal - subtotalLabel.length - total.toFixed(2).length - 1)}$${total.toFixed(2)}` + lineFeed +
+        (totalParaLlevar > 0 ? `${paraLlevarLabel}${' '.repeat(anchoTotal - paraLlevarLabel.length - totalParaLlevar.toFixed(2).length - 1)}$${totalParaLlevar.toFixed(2)}` + lineFeed : '') +
+        separator + lineFeed +
+        `${totalLabel}${' '.repeat(anchoTotal - totalLabel.length - (total+totalParaLlevar).toFixed(2).length - 1)}$${(total+totalParaLlevar).toFixed(2)}` + lineFeed +
+        separator + lineFeed +
+        centerText + removeAccents('GRACIAS POR TU COMPRA') + lineFeed +
+        removeAccents('VUELVE PRONTO :)') + lineFeed +
+        leftAlign + separator + lineFeed +
+        '\n'.repeat(isBluetoothEnabled ? 3 : 5) + // Menos espacios al final
+        resetFormat;
 
       // Usar Bluetooth o TCP según la configuración
       if (isBluetoothEnabled && bluetoothDevice) {
@@ -1420,7 +1542,7 @@ ${'\n'.repeat(isBluetoothEnabled ? 5 : 10)}
                         </Text>
                       </TouchableOpacity>
                       <Text style={styles.orderItemPrice}>
-                        ${(item.price + (item.takeoutFee || 0)).toFixed(2)}
+                        ${item.price.toFixed(2)}
                       </Text>
                     </View>
                     {item.excludedIngredients &&

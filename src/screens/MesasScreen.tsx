@@ -10,11 +10,13 @@ import {
   RefreshControl,
   Alert,
   Modal,
+  Dimensions,
 } from 'react-native';
 import { StoreService } from '../services/storeService';
 import { OrderLecrepeService } from '../services/orderLecrepeService';
 import { StorageService } from '../services/storageService';
 import { Store, Place, Order } from '../types';
+import { OrderCreation } from '../components';
 
 interface MesasScreenProps {
   navigation?: any;
@@ -24,9 +26,12 @@ const MesasScreen: React.FC<MesasScreenProps> = ({ navigation }) => {
   const [store, setStore] = useState<Store | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [selectedTable, setSelectedTable] = useState<Place | null>(null);
-  const [orderDetailOpen, setOrderDetailOpen] = useState(false);
+  const [isOrderCreationOpen, setIsOrderCreationOpen] = useState(false);
+  const [isViewingOrder, setIsViewingOrder] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  // Estado para rastrear las mesas del croquis y sus órdenes
+  const [croquisTablesState, setCroquisTablesState] = useState<Record<string, { order: Order | null; available: boolean }>>({});
 
   useEffect(() => {
     loadData();
@@ -49,22 +54,90 @@ const MesasScreen: React.FC<MesasScreenProps> = ({ navigation }) => {
       const ordersResponse = await OrderLecrepeService.getAllOrdersLecrepe(parseInt(idStore));
       const ordersData = ordersResponse.data || [];
 
+      // Filtrar órdenes activas (no cerradas, entregadas o canceladas)
+      const activeOrders = ordersData.filter((o) => 
+        o.status !== 'Cerrada' && 
+        o.status !== 'Entregada' && 
+        o.status !== 'Cancelada'
+      );
+      
       // Add orders to tables
+      const newCroquisState: Record<string, { order: Order | null; available: boolean }> = {};
+      
       if (storeData.places) {
         storeData.places.forEach((place) => {
-          const order = ordersData.find((o) => o.id_place === place.id_place);
+          // Buscar orden activa por id_place (solo órdenes no cerradas)
+          let order = activeOrders.find((o) => o.id_place === place.id_place);
+          
+          // Si no se encuentra por id_place, buscar por nombre de mesa en el cliente o nombre de la orden
+          if (!order && place.name) {
+            order = activeOrders.find((o) => {
+              // Buscar por nombre de cliente que coincida con el nombre de la mesa
+              const clientName = o.client?.name || o.name || '';
+              const normalizedClientName = clientName.toUpperCase().replace(/[^A-Z0-9]/g, '');
+              const normalizedPlaceName = place.name.toUpperCase().replace(/[^A-Z0-9]/g, '');
+              
+              // También buscar si el id_place es 0 y el nombre de la orden contiene el nombre de la mesa
+              return (o.id_place === 0 || o.id_place === parseInt(String(place.name)) || isNaN(parseInt(String(place.name)))) &&
+                     (normalizedClientName === normalizedPlaceName || 
+                      normalizedClientName.includes(normalizedPlaceName) ||
+                      normalizedPlaceName.includes(normalizedClientName));
+            });
+          }
+          
           if (order) {
             place.order = order;
+            // La mesa está ocupada si tiene una orden activa
             place.available = false;
           } else {
             place.available = true;
             place.order = undefined;
           }
+          
+          // Guardar estado en croquisTablesState
+          if (place.name) {
+            newCroquisState[place.name.toUpperCase()] = {
+              order: place.order || null,
+              available: place.available,
+            };
+          }
         });
       }
+      
+      // También buscar órdenes activas que puedan estar asociadas a mesas del croquis por nombre
+      const croquisTableNames = ['T1', 'T2', 'T3', 'T4', 'ARBOL', 'BICI', 'MONA', 'CENTRO', 'TELEFONO', 'ESCALERA', 'TES'];
+      croquisTableNames.forEach((tableName) => {
+        if (!newCroquisState[tableName]) {
+          // Buscar orden activa por nombre de mesa en el cliente o nombre de la orden
+          const order = activeOrders.find((o) => {
+            const clientName = o.client?.name || o.name || '';
+            const normalizedClientName = clientName.toUpperCase().replace(/[^A-Z0-9]/g, '');
+            const normalizedTableName = tableName.toUpperCase().replace(/[^A-Z0-9]/g, '');
+            
+            return normalizedClientName === normalizedTableName || 
+                   normalizedClientName.includes(normalizedTableName) ||
+                   normalizedTableName.includes(normalizedClientName);
+          });
+          
+          if (order) {
+            // Orden activa encontrada - mesa ocupada
+            newCroquisState[tableName] = {
+              order: order,
+              available: false,
+            };
+          } else {
+            // No hay orden activa - mesa disponible
+            newCroquisState[tableName] = {
+              order: null,
+              available: true,
+            };
+          }
+        }
+      });
 
       setStore(storeData);
       setOrders(ordersData);
+      setCroquisTablesState(newCroquisState);
     } catch (error: any) {
       console.error('Error loading data:', error);
       Alert.alert('Error', 'No se pudieron cargar los datos');
@@ -82,30 +155,93 @@ const MesasScreen: React.FC<MesasScreenProps> = ({ navigation }) => {
   const handleTablePress = (place: Place) => {
     setSelectedTable(place);
     if (place.order) {
-      setOrderDetailOpen(true);
+      // Mesa ocupada: mostrar orden existente
+      setIsViewingOrder(true);
+      setIsOrderCreationOpen(true);
     } else {
-      // TODO: Open new order creation
-      Alert.alert('Mesa Disponible', 'Crear nueva orden para esta mesa - por implementar');
+      // Mesa disponible: crear nueva orden
+      setIsViewingOrder(false);
+      setIsOrderCreationOpen(true);
+    }
+  };
+
+  const handleCloseOrderCreation = () => {
+    setIsOrderCreationOpen(false);
+    setIsViewingOrder(false);
+    setSelectedTable(null);
+    loadData(); // Recargar datos para actualizar el estado de las mesas
+  };
+
+  const handleOrderCreated = async (orderData: Partial<Order>) => {
+    try {
+      // La orden ya fue creada por OrderCreation, recargamos los datos
+      // loadData() actualizará automáticamente croquisTablesState
+      await loadData();
+      handleCloseOrderCreation();
+      Alert.alert('Éxito', `Orden creada para Mesa ${selectedTable?.name || ''}`);
+    } catch (error: any) {
+      console.error('Error handling order creation:', error);
+      Alert.alert('Error', 'No se pudo crear la orden');
+    }
+  };
+
+  const handleOrderUpdated = async (orderData: Partial<Order>) => {
+    try {
+      // El backend espera id_order como número en la URL
+      // orderData debería incluir id_order desde OrderCreation
+      let orderId: string | number | undefined;
+      
+      // Prioridad: id_order de orderData > id_order de selectedTable.order > _id de selectedTable.order
+      if (orderData.id_order) {
+        orderId = orderData.id_order;
+      } else if (selectedTable?.order?.id_order) {
+        orderId = selectedTable.order.id_order;
+      } else if (selectedTable?.order?._id) {
+        // Si solo tenemos _id, intentar usarlo (puede que el backend lo acepte)
+        orderId = selectedTable.order._id;
+      } else {
+        Alert.alert('Error', 'No se pudo identificar la orden');
+        return;
+      }
+      
+      // Asegurarse de que orderData no incluya id_order en el body (solo en la URL)
+      const { id_order, ...orderDataWithoutId } = orderData;
+      
+      await OrderLecrepeService.updateOrderLecrepe(orderId, orderDataWithoutId);
+      // loadData() actualizará automáticamente croquisTablesState
+      await loadData();
+      handleCloseOrderCreation();
+      Alert.alert('Éxito', `Orden actualizada para Mesa ${selectedTable?.name || ''}`);
+    } catch (error: any) {
+      console.error('Error handling order update:', error);
+      Alert.alert('Error', 'No se pudo actualizar la orden');
     }
   };
 
   const getTableStatusColor = (place: Place) => {
-    if (!place.available && place.order) {
+    // Si la mesa está disponible (sin orden o con orden cerrada/entregada/cancelada)
+    if (place.available) {
+      return '#4CAF50'; // Verde para mesas disponibles
+    }
+    
+    // Si la mesa tiene una orden activa
+    if (place.order) {
       switch (place.order.status) {
         case 'Cerrada':
         case 'Entregada':
-          return '#9e9e9e';
+          return '#4CAF50'; // Verde - mesa disponible nuevamente
         case 'Lista':
-          return '#FF9800';
+          return '#FF9800'; // Naranja
         case 'Pendiente':
-          return '#F44336';
+          return '#F44336'; // Rojo
         case 'Cancelada':
-          return '#9E9E9E';
+          return '#4CAF50'; // Verde - mesa disponible nuevamente
         default:
-          return '#F44336';
+          return '#F44336'; // Rojo por defecto
       }
     }
-    return '#9e9e9e';
+    
+    return '#4CAF50'; // Verde por defecto (mesa disponible)
   };
 
   const getTableStatusText = (place: Place) => {
@@ -127,6 +263,102 @@ const MesasScreen: React.FC<MesasScreenProps> = ({ navigation }) => {
     return 'Disponible';
   };
 
+  // Función para encontrar una mesa por nombre (flexible con variaciones)
+  const findPlaceByName = (name: string): Place | undefined => {
+    if (!store?.places) return undefined;
+    
+    const normalizedName = name.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    
+    return store.places.find((place) => {
+      if (!place.name) return false;
+      const normalizedPlaceName = place.name.toUpperCase().replace(/[^A-Z0-9]/g, '');
+      
+      // Coincidencias exactas o normalizadas
+      if (place.name.toUpperCase() === name.toUpperCase()) return true;
+      if (normalizedPlaceName === normalizedName) return true;
+      
+      // Coincidencias parciales para casos como "CENTROI" -> "CENTRO", "TÉS" -> "TES"
+      if (normalizedPlaceName.includes(normalizedName) || normalizedName.includes(normalizedPlaceName)) {
+        return true;
+      }
+      
+      return false;
+    });
+  };
+
+  // Función para renderizar una mesa del croquis
+  const renderTable = (tableName: string, style: any) => {
+    const place = findPlaceByName(tableName);
+    const croquisState = croquisTablesState[tableName.toUpperCase()];
+    
+    // Usar el estado del croquis si existe, de lo contrario usar el place
+    const tableOrder = croquisState?.order || place?.order;
+    const isAvailable = croquisState !== undefined ? croquisState.available : (place?.available ?? true);
+    
+    // Determinar color y texto del estado
+    let statusColor = '#4CAF50'; // Verde por defecto (disponible)
+    let statusText = 'Disponible';
+    
+    if (tableOrder && !isAvailable) {
+      // Mesa ocupada con orden activa
+      switch (tableOrder.status) {
+        case 'Lista':
+          statusColor = '#FF9800'; // Naranja
+          statusText = 'Lista';
+          break;
+        case 'Pendiente':
+          statusColor = '#F44336'; // Rojo
+          statusText = 'Pendiente';
+          break;
+        default:
+          statusColor = '#F44336'; // Rojo
+          statusText = 'Ocupada';
+      }
+    } else if (tableOrder && isAvailable) {
+      // Mesa con orden cerrada/entregada/cancelada
+      statusColor = '#4CAF50'; // Verde - disponible
+      statusText = 'Disponible';
+    }
+    
+    // Función para manejar el clic en la mesa
+    const handleTableClick = () => {
+      if (place) {
+        // Si la mesa existe en la base de datos, usar el place real
+        handleTablePress(place);
+      } else {
+        // Si la mesa no existe, crear un Place temporal con el estado del croquis
+        const tempPlace: Place = {
+          id_place: 0, // Se asignará cuando se cree la orden
+          name: tableName,
+          available: isAvailable,
+          order: tableOrder || undefined,
+        };
+        handleTablePress(tempPlace);
+      }
+    };
+    
+    return (
+      <TouchableOpacity
+        key={tableName}
+        style={[styles.croquisTable, style, { backgroundColor: statusColor }]}
+        onPress={handleTableClick}
+      >
+        <Text style={styles.croquisTableName}>{tableName}</Text>
+        {tableOrder && !isAvailable && (
+          <>
+            <Text style={styles.croquisTableStatus}>{statusText}</Text>
+            <Text style={styles.croquisTableOrder}>
+              #{tableOrder.id_order}
+            </Text>
+            <Text style={styles.croquisTableAmount} numberOfLines={1}>
+              ${(tableOrder.payment?.amount || tableOrder.total || 0).toFixed(0)}
+            </Text>
+          </>
+        )}
+      </TouchableOpacity>
+    );
+  };
+
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -137,6 +369,19 @@ const MesasScreen: React.FC<MesasScreenProps> = ({ navigation }) => {
       </SafeAreaView>
     );
   }
+
+  const screenWidth = Dimensions.get('window').width;
+  const screenHeight = Dimensions.get('window').height;
+  const leftColumnWidth = screenWidth * 0.25; // 25% para columna izquierda
+  const rightAreaWidth = screenWidth * 0.75; // 75% para área derecha
+  const tableSpacing = 12;
+  // Calcular altura disponible (pantalla completa menos header y SafeArea)
+  const headerHeight = 60; // Altura aproximada del header
+  const safeAreaTop = 44; // SafeArea top en iOS
+  const padding = 16; // Padding del contenedor
+  const availableHeight = screenHeight - headerHeight - safeAreaTop - padding;
+  // Distribuir verticalmente: 4 filas de mesas
+  const rowHeight = (availableHeight - (tableSpacing * 3)) / 4;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -157,109 +402,126 @@ const MesasScreen: React.FC<MesasScreenProps> = ({ navigation }) => {
         </TouchableOpacity>
       </View>
 
-      {/* Tables Grid */}
+      {/* Croquis Layout */}
       <ScrollView
         style={styles.content}
+        contentContainerStyle={styles.croquisContainer}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        <View style={styles.tablesGrid}>
-          {store?.places?.map((place) => (
-            <TouchableOpacity
-              key={place.id_place}
-              style={[
-                styles.tableCard,
-                { backgroundColor: getTableStatusColor(place) },
-              ]}
-              onPress={() => handleTablePress(place)}
-            >
-              <View style={styles.tableContent}>
-                <Text style={styles.tableName}>{place.name}</Text>
-                <Text style={styles.tableStatus}>
-                  {getTableStatusText(place)}
-                </Text>
-                {place.order && (
-                  <>
-                    <Text style={styles.tableOrderNumber}>
-                      Orden #{place.order.id_order}
-                    </Text>
-                    <Text style={styles.tableClientName}>
-                      {place.order.client?.name || place.order.name}
-                    </Text>
-                    <Text style={styles.tableAmount}>
-                      ${(place.order.payment?.amount || 0).toFixed(2)}
-                    </Text>
-                  </>
-                )}
-              </View>
-            </TouchableOpacity>
-          ))}
+        {/* Columna Izquierda - T1, T2, T3, T4 */}
+        <View style={[styles.leftColumn, { width: leftColumnWidth, height: availableHeight }]}>
+          {renderTable('T1', { 
+            position: 'absolute', 
+            top: 0, 
+            left: 0, 
+            width: leftColumnWidth - 8, 
+            height: rowHeight 
+          })}
+          {renderTable('T2', { 
+            position: 'absolute', 
+            top: rowHeight + tableSpacing, 
+            left: 0, 
+            width: leftColumnWidth - 8, 
+            height: rowHeight 
+          })}
+          {renderTable('T3', { 
+            position: 'absolute', 
+            top: (rowHeight + tableSpacing) * 2, 
+            left: 0, 
+            width: leftColumnWidth - 8, 
+            height: rowHeight 
+          })}
+          {renderTable('T4', { 
+            position: 'absolute', 
+            top: (rowHeight + tableSpacing) * 3, 
+            left: 0, 
+            width: leftColumnWidth - 8, 
+            height: rowHeight 
+          })}
+        </View>
+
+        {/* Área Derecha Principal */}
+        <View style={[styles.mainRightArea, { width: rightAreaWidth, height: availableHeight, marginLeft: 8 }]}>
+          {/* Fila 1 */}
+          {renderTable('ARBOL', { 
+            position: 'absolute', 
+            top: 0, 
+            left: 0, 
+            width: (rightAreaWidth - 16) * 0.48, 
+            height: rowHeight 
+          })}
+          {renderTable('BICI', { 
+            position: 'absolute', 
+            top: 0, 
+            right: 0, 
+            width: (rightAreaWidth - 16) * 0.48, 
+            height: rowHeight 
+          })}
+
+          {/* Fila 2 */}
+          {renderTable('MONA', { 
+            position: 'absolute', 
+            top: rowHeight + tableSpacing, 
+            left: 0, 
+            width: (rightAreaWidth - 16) * 0.48, 
+            height: rowHeight 
+          })}
+          {renderTable('CENTRO', { 
+            position: 'absolute', 
+            top: rowHeight + tableSpacing, 
+            right: 0, 
+            width: (rightAreaWidth - 16) * 0.48, 
+            height: rowHeight 
+          })}
+
+          {/* Fila 3 */}
+          {renderTable('TELEFONO', { 
+            position: 'absolute', 
+            top: (rowHeight + tableSpacing) * 2, 
+            left: 0, 
+            width: (rightAreaWidth - 16) * 0.48, 
+            height: rowHeight 
+          })}
+          {renderTable('ESCALERA', { 
+            position: 'absolute', 
+            top: (rowHeight + tableSpacing) * 2, 
+            right: 0, 
+            width: (rightAreaWidth - 16) * 0.48, 
+            height: rowHeight 
+          })}
+
+          {/* Fila 4 */}
+          {renderTable('TES', { 
+            position: 'absolute', 
+            top: (rowHeight + tableSpacing) * 3, 
+            left: (rightAreaWidth - 16) * 0.26, 
+            width: (rightAreaWidth - 16) * 0.48, 
+            height: rowHeight 
+          })}
         </View>
       </ScrollView>
 
-      {/* Order Detail Modal */}
-      <Modal
-        visible={orderDetailOpen}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setOrderDetailOpen(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
-                Mesa {selectedTable?.name} - Orden #{selectedTable?.order?.id_order}
-              </Text>
-              <TouchableOpacity
-                style={styles.closeButton}
-                onPress={() => setOrderDetailOpen(false)}
-              >
-                <Text style={styles.closeButtonText}>✕</Text>
-              </TouchableOpacity>
-            </View>
-            {selectedTable?.order && (
-              <ScrollView style={styles.modalBody}>
-                <Text style={styles.detailLabel}>Cliente:</Text>
-                <Text style={styles.detailValue}>
-                  {selectedTable.order.client?.name || selectedTable.order.name || 'N/A'}
-                </Text>
-                <Text style={styles.detailLabel}>Estado:</Text>
-                <Text style={styles.detailValue}>{selectedTable.order.status}</Text>
-                <Text style={styles.detailLabel}>Productos:</Text>
-                {selectedTable.order.items?.map((item, index) => (
-                  <View key={index} style={styles.productItem}>
-                    <Text style={styles.productName}>
-                      {item.product_name} - {item.type_name}
-                    </Text>
-                    <Text style={styles.productDetails}>
-                      Cantidad: {item.units} | Precio: ${item.type_price.toFixed(2)}
-                    </Text>
-                  </View>
-                ))}
-                {selectedTable.order.products?.map((product, index) => (
-                  <View key={index} style={styles.productItem}>
-                    <Text style={styles.productName}>
-                      {product.product_name} - {product.type_name}
-                    </Text>
-                    <Text style={styles.productDetails}>
-                      Cantidad: {product.units} | Precio: ${product.type_price.toFixed(2)}
-                    </Text>
-                  </View>
-                ))}
-                {selectedTable.order.payment && (
-                  <>
-                    <Text style={styles.detailLabel}>Total:</Text>
-                    <Text style={styles.detailValue}>
-                      ${selectedTable.order.payment.amount.toFixed(2)}
-                    </Text>
-                  </>
-                )}
-              </ScrollView>
-            )}
-          </View>
-        </View>
-      </Modal>
+      {/* OrderCreation Modal */}
+      {selectedTable && (
+        <OrderCreation
+          isOpen={isOrderCreationOpen}
+          onClose={handleCloseOrderCreation}
+          tableInfo={{
+            mesa: (selectedTable.id_place && selectedTable.id_place > 0) 
+              ? selectedTable.id_place.toString() 
+              : selectedTable.name || '0',
+            nombre: selectedTable.order?.client?.name || selectedTable.order?.name || 'Cliente General',
+            orden: selectedTable.order?.id_order || 0,
+          }}
+          isTakeout={false}
+          editingOrder={isViewingOrder ? selectedTable.order : null}
+          isEditMode={isViewingOrder}
+          onSave={isViewingOrder ? handleOrderUpdated : handleOrderCreated}
+          readOnly={selectedTable.order?.status === 'Cerrada' || selectedTable.order?.status === 'Cancelada' || selectedTable.order?.status === 'Entregada'}
+        />
+      )}
     </SafeAreaView>
   );
 };
@@ -315,53 +577,59 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
   },
-  tablesGrid: {
+  croquisContainer: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    padding: 16,
-    justifyContent: 'space-between',
+    padding: 8,
+    flexGrow: 1,
+    minHeight: '100%',
   },
-  tableCard: {
-    width: '48%',
-    aspectRatio: 1,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
+  leftColumn: {
+    position: 'relative',
+  },
+  mainRightArea: {
+    position: 'relative',
+    flex: 1,
+  },
+  croquisTable: {
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#333',
+    padding: 8,
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  tableContent: {
-    alignItems: 'center',
-  },
-  tableName: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 8,
-  },
-  tableStatus: {
-    fontSize: 12,
-    color: '#fff',
-    opacity: 0.9,
-    marginBottom: 8,
-  },
-  tableOrderNumber: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#fff',
-    marginTop: 8,
-  },
-  tableClientName: {
-    fontSize: 12,
-    color: '#fff',
-    opacity: 0.9,
-    marginTop: 4,
-  },
-  tableAmount: {
+  croquisTableName: {
     fontSize: 16,
     fontWeight: 'bold',
     color: '#fff',
-    marginTop: 8,
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  croquisTableStatus: {
+    fontSize: 10,
+    color: '#fff',
+    opacity: 0.9,
+    textAlign: 'center',
+    marginBottom: 2,
+  },
+  croquisTableOrder: {
+    fontSize: 10,
+    color: '#fff',
+    opacity: 0.8,
+    textAlign: 'center',
+    marginTop: 2,
+  },
+  croquisTableAmount: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#fff',
+    textAlign: 'center',
+    marginTop: 2,
   },
   modalOverlay: {
     flex: 1,

@@ -11,6 +11,7 @@ import {
   TextInput,
   Platform,
   PermissionsAndroid,
+  NativeModules,
 } from 'react-native';
 import TcpSocket from 'react-native-tcp-socket';
 import NetInfo from '@react-native-community/netinfo';
@@ -137,6 +138,38 @@ const ConfigScreen: React.FC<ConfigScreenProps> = ({ navigation }) => {
   };
 
 
+  // Función para obtener el logo en formato ESC/POS
+  const getLogoEscPos = async (printerWidth: number): Promise<string> => {
+    try {
+      // Intentar usar el módulo nativo de iOS si está disponible
+      if (Platform.OS === 'ios' && NativeModules.ImageToEscPos) {
+        const logoBase64 = await NativeModules.ImageToEscPos.convertImageToEscPos('', printerWidth);
+        // Convertir base64 a string binario
+        const logoBinary = atob(logoBase64);
+        let logoString = '';
+        for (let i = 0; i < logoBinary.length; i++) {
+          logoString += logoBinary.charAt(i);
+        }
+        return logoString;
+      }
+    } catch (error) {
+      console.log('No se pudo cargar el logo, continuando sin logo:', error);
+    }
+    // Si no se puede cargar el logo, retornar string vacío
+    return '';
+  };
+
+  // Función para remover acentos
+  const removeAccents = (str: string): string => {
+    return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .replace(/[ñÑ]/g, (match) => match === 'ñ' ? 'n' : 'N')
+      .replace(/[áÁ]/g, 'A')
+      .replace(/[éÉ]/g, 'E')
+      .replace(/[íÍ]/g, 'I')
+      .replace(/[óÓ]/g, 'O')
+      .replace(/[úÚ]/g, 'U');
+  };
+
   const handleTestPrint = async () => {
     if (!isBluetoothEnabled && (!printerIP || !printerPort)) {
       Alert.alert('Error', 'Por favor configura la impresora (IP/Puerto o Bluetooth)');
@@ -165,36 +198,30 @@ const ConfigScreen: React.FC<ConfigScreenProps> = ({ navigation }) => {
     const leftAlign = ESC + 'a' + '\x00'; // Izquierda
     const resetFormat = ESC + '@'; // Reset
     const lineFeed = '\n';
-    const doubleSizeBold = ESC + '!' + '\x38'; // Doble tamaño y negritas
-    const normalSize = ESC + '!' + '\x00'; // Tamaño normal
+    const smallSize = ESC + '!' + '\x00'; // Tamaño pequeño/normal
 
     try {
-      // Generar encabezado con LECREPE en grande y negritas
-      const header = resetFormat + centerText + 
-                     doubleSizeBold + 'LECREPE APP' + normalSize;
+      // Obtener el logo en formato ESC/POS
+      const printerWidth = isBluetoothEnabled ? 384 : 576; // 58mm: 384px, 80mm: 576px
+      const logoEscPos = await getLogoEscPos(printerWidth);
 
       // Crear el contenido completo del ticket
-      const testContent = resetFormat + 
-        header + lineFeed + // LECREPE APP en grande y negritas
-        centerText + `
-CD. MANUEL DOBLADO
-Tel: 432-100-4990
-` + leftAlign + `
----------------------------------------------
-ESTA ES UNA IMPRESION DE PRUEBA 
-IP: ${printerIP}
-NOMBRE:  XPRINTER 8MM
-PUERTO: ${printerPort}
-FECHA: ${currentDate}
----------------------------------------------
-` + centerText + `
-		GRACIAS POR TU COMPRA
-		VUELVE PRONTO :)
-` + leftAlign + `
----------------------------------------------
-
-${'\n'.repeat(10)}
-` + resetFormat;
+      const testContent = resetFormat + smallSize +
+        (logoEscPos ? logoEscPos + lineFeed + lineFeed : '') + // Logo en la parte superior
+        centerText + removeAccents('CD. MANUEL DOBLADO') + lineFeed +
+        removeAccents('Tel: 432-100-4990') + lineFeed +
+        leftAlign + '---------------------------------------------' + lineFeed +
+        removeAccents('ESTA ES UNA IMPRESION DE PRUEBA') + lineFeed +
+        `IP: ${printerIP}` + lineFeed +
+        removeAccents('NOMBRE: XPRINTER 8MM') + lineFeed +
+        `PUERTO: ${printerPort}` + lineFeed +
+        `FECHA: ${removeAccents(currentDate)}` + lineFeed +
+        '---------------------------------------------' + lineFeed +
+        centerText + removeAccents('GRACIAS POR TU COMPRA') + lineFeed +
+        removeAccents('VUELVE PRONTO :)') + lineFeed +
+        leftAlign + '---------------------------------------------' + lineFeed +
+        '\n'.repeat(5) + // Menos espacios
+        resetFormat;
 
       // Usar Bluetooth o TCP según la configuración
       if (isBluetoothEnabled && bluetoothDevice) {

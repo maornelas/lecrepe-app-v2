@@ -21,7 +21,7 @@ class ImageToEscPos: NSObject, RCTBridgeModule {
         var image: UIImage?
         
         // Intentar cargar desde el bundle
-        if let bundlePath = Bundle.main.path(forResource: "logo-kokoro", ofType: "png") {
+        if let bundlePath = Bundle.main.path(forResource: "logo-lecrepe", ofType: "png") {
           image = UIImage(contentsOfFile: bundlePath)
         }
         
@@ -32,7 +32,7 @@ class ImageToEscPos: NSObject, RCTBridgeModule {
         
         // Si aún no se encontró, intentar desde el main bundle directamente
         if image == nil {
-          if let bundleImage = UIImage(named: "logo-kokoro") {
+          if let bundleImage = UIImage(named: "logo-lecrepe") {
             image = bundleImage
           }
         }
