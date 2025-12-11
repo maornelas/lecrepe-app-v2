@@ -16,7 +16,7 @@ class LecrepeBluetooth: NSObject {
   private var session: EASession?
   
   @objc
-  func isBluetoothEnabled(_ resolve: @escaping RCTPromiseResolveBlock, rejecter reject: @escaping RCTPromiseRejectBlock) {
+  func isBluetoothEnabled(_ resolve: @escaping (Bool) -> Void, rejecter reject: @escaping (String, String, NSError?) -> Void) {
     // For iOS, we check External Accessory availability
     let manager = EAAccessoryManager.shared()
     let isEnabled = manager.connectedAccessories.count >= 0 // Always true for EA framework
