@@ -13,7 +13,6 @@ import {
   Platform,
 } from 'react-native';
 import TcpSocket from 'react-native-tcp-socket';
-import RNBluetoothClassic, { BluetoothDevice } from 'react-native-bluetooth-classic';
 import { ProductService, Product } from '../services/productService';
 import { OrderLecrepeService } from '../services/orderLecrepeService';
 import { StorageService } from '../services/storageService';

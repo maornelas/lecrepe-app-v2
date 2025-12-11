@@ -1,18 +1,10 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-// Lazy import para evitar errores de inicialización
-let RNBluetoothClassic: any = null;
-let BluetoothDevice: any = null;
-
-try {
-  const bluetoothModule = require('react-native-bluetooth-classic');
-  RNBluetoothClassic = bluetoothModule.default || bluetoothModule;
-  BluetoothDevice = bluetoothModule.BluetoothDevice;
-} catch (error) {
-  console.warn('Bluetooth module not available:', error);
-}
-
+import { NativeModules, Platform, PermissionsAndroid } from 'react-native';
 import { StorageService } from '../services/storageService';
-import { Platform, PermissionsAndroid } from 'react-native';
+import { LecrepeBluetoothService, BluetoothDevice } from '../services/lecrepeBluetoothService';
+
+// Use native module instead of react-native-bluetooth-classic
+const { LecrepeBluetooth } = NativeModules;
 
 interface BluetoothContextType {
   isBluetoothEnabled: boolean;
@@ -54,14 +46,13 @@ export const BluetoothProvider: React.FC<{ children: ReactNode }> = ({ children 
           // Intentar reconectar al dispositivo guardado
           if (savedDeviceAddress) {
             try {
-              // Verificar que el módulo esté disponible antes de usarlo
-              if (RNBluetoothClassic && typeof RNBluetoothClassic.getBondedDevices === 'function') {
-                const devices = await RNBluetoothClassic.getBondedDevices();
+              if (LecrepeBluetooth) {
+                const devices = await LecrepeBluetoothService.getPairedDevices();
                 const savedDevice = devices.find(d => d.address === savedDeviceAddress);
                 if (savedDevice) {
                   // Verificar si ya está conectado
                   try {
-                    const isConnected = await savedDevice.isConnected();
+                    const isConnected = await LecrepeBluetoothService.isConnected();
                     if (isConnected) {
                       setBluetoothDevice(savedDevice);
                       console.log('✅ Already connected to saved device:', savedDevice.name || savedDeviceAddress);
@@ -92,25 +83,13 @@ export const BluetoothProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   const checkBluetooth = async () => {
     try {
-      // Lazy load del módulo si no está disponible
-      if (!RNBluetoothClassic) {
-        try {
-          const bluetoothModule = require('react-native-bluetooth-classic');
-          RNBluetoothClassic = bluetoothModule.default || bluetoothModule;
-        } catch (e) {
-          console.warn('Bluetooth module not available:', e);
-          setBluetoothAvailable(false);
-          return;
-        }
+      if (!LecrepeBluetooth) {
+        setBluetoothAvailable(false);
+        return;
       }
 
-      // Verificar que el módulo esté disponible antes de usarlo
-      if (RNBluetoothClassic && typeof RNBluetoothClassic.isBluetoothEnabled === 'function') {
-        const isEnabled = await RNBluetoothClassic.isBluetoothEnabled();
-        setBluetoothAvailable(isEnabled !== undefined && isEnabled !== null);
-      } else {
-        setBluetoothAvailable(false);
-      }
+      const isEnabled = await LecrepeBluetoothService.isBluetoothAvailable();
+      setBluetoothAvailable(isEnabled);
     } catch (error) {
       console.warn('Bluetooth check failed:', error);
       setBluetoothAvailable(false);
@@ -147,18 +126,7 @@ export const BluetoothProvider: React.FC<{ children: ReactNode }> = ({ children 
     setBluetoothDevices([]);
 
     try {
-      // Lazy load del módulo si no está disponible
-      if (!RNBluetoothClassic) {
-        try {
-          const bluetoothModule = require('react-native-bluetooth-classic');
-          RNBluetoothClassic = bluetoothModule.default || bluetoothModule;
-        } catch (e) {
-          throw new Error('El módulo Bluetooth no está disponible');
-        }
-      }
-
-      // Verificar que el módulo esté disponible
-      if (!RNBluetoothClassic || typeof RNBluetoothClassic.getBondedDevices !== 'function') {
+      if (!LecrepeBluetooth) {
         throw new Error('El módulo Bluetooth no está disponible');
       }
 
@@ -167,12 +135,12 @@ export const BluetoothProvider: React.FC<{ children: ReactNode }> = ({ children 
         throw new Error('Se necesitan permisos de Bluetooth para escanear dispositivos');
       }
 
-      const isEnabled = await RNBluetoothClassic.isBluetoothEnabled();
+      const isEnabled = await LecrepeBluetoothService.isBluetoothAvailable();
       if (!isEnabled) {
         throw new Error('Por favor activa Bluetooth en tu dispositivo');
       }
 
-      const devices = await RNBluetoothClassic.getBondedDevices();
+      const devices = await LecrepeBluetoothService.getPairedDevices();
       setBluetoothDevices(devices);
       
       if (devices.length === 0) {
@@ -191,25 +159,10 @@ export const BluetoothProvider: React.FC<{ children: ReactNode }> = ({ children 
   };
 
   const connectBluetoothDevice = async (device: BluetoothDevice) => {
-    // Lazy load del módulo si no está disponible
-    if (!RNBluetoothClassic) {
-      try {
-        const bluetoothModule = require('react-native-bluetooth-classic');
-        RNBluetoothClassic = bluetoothModule.default || bluetoothModule;
-      } catch (e) {
-        throw new Error('El módulo Bluetooth no está disponible');
-      }
-    }
-
-    // Verificar que el módulo esté disponible
-    if (!RNBluetoothClassic || typeof RNBluetoothClassic.isBluetoothEnabled !== 'function') {
-      throw new Error('El módulo Bluetooth no está disponible');
-    }
-
-    // Desconectar cualquier dispositivo conectado previamente (como kokoro-app)
+    // Desconectar cualquier dispositivo conectado previamente
     if (bluetoothDevice && bluetoothDevice.address !== device.address) {
       try {
-        await bluetoothDevice.disconnect();
+        await LecrepeBluetoothService.disconnect();
       } catch (error) {
         console.warn('Error disconnecting previous device:', error);
         // No lanzar error aquí, continuar con la conexión
@@ -227,55 +180,16 @@ export const BluetoothProvider: React.FC<{ children: ReactNode }> = ({ children 
       }
 
       // Verificar que Bluetooth esté habilitado
-      const isEnabled = await RNBluetoothClassic.isBluetoothEnabled();
+      const isEnabled = await LecrepeBluetoothService.isBluetoothAvailable();
       if (!isEnabled) {
         throw new Error('Por favor activa Bluetooth en tu dispositivo');
       }
 
-      // Conectar directamente como kokoro-app
-      let connected = false;
-      try {
-        connected = await device.connect();
-      } catch (connectError: any) {
-        // Capturar errores específicos de conexión
-        const errorMessage = connectError?.message || 'Error desconocido';
-        if (errorMessage.includes('timeout') || errorMessage.includes('Timeout')) {
-          throw new Error('Tiempo de espera agotado. El dispositivo no respondió.');
-        } else if (errorMessage.includes('permission') || errorMessage.includes('Permission')) {
-          throw new Error('Permisos de Bluetooth insuficientes. Verifica los permisos en la configuración del dispositivo.');
-        } else if (errorMessage.includes('already') || errorMessage.includes('Already')) {
-          // Si ya está conectado, verificar y usar el dispositivo
-          try {
-            const isConnected = await device.isConnected();
-            if (isConnected) {
-              setBluetoothDevice(device);
-              setUseBluetooth(true);
-              await StorageService.setItem('bluetoothDeviceAddress', device.address);
-              await StorageService.setItem('useBluetooth', 'true');
-              console.log('✅ Device already connected:', device.name || device.address);
-              return; // Salir exitosamente
-            }
-          } catch (checkError) {
-            // Continuar con el error original
-          }
-          throw new Error('El dispositivo ya está conectado a otro dispositivo o aplicación.');
-        } else {
-          throw new Error(`Error de conexión: ${errorMessage}`);
-        }
-      }
-
+      // Conectar usando el servicio nativo
+      const connected = await LecrepeBluetoothService.connectToDevice(device);
+      
       if (connected) {
-        // Verificar que la conexión sea válida
-        try {
-          const isConnected = await device.isConnected();
-          if (!isConnected) {
-            throw new Error('La conexión se estableció pero el dispositivo no está disponible');
-          }
-        } catch (verifyError: any) {
-          throw new Error('No se pudo verificar la conexión con el dispositivo');
-        }
-
-        // Guardar el objeto device (que tiene el método write), no el resultado boolean
+        // Guardar el dispositivo
         setBluetoothDevice(device);
         setUseBluetooth(true);
         
@@ -306,9 +220,7 @@ export const BluetoothProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   const disconnectBluetoothDevice = async () => {
     try {
-      if (bluetoothDevice) {
-        await bluetoothDevice.disconnect();
-      }
+      await LecrepeBluetoothService.disconnect();
       
       // Limpiar storage
       await StorageService.setItem('bluetoothDeviceAddress', '');
@@ -329,14 +241,14 @@ export const BluetoothProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
 
     try {
-      // Verificar conexión usando el método isConnected() del BluetoothDevice (como kokoro-app)
-      const isConnected = await bluetoothDevice.isConnected();
+      // Verificar conexión
+      const isConnected = await LecrepeBluetoothService.isConnected();
       if (!isConnected) {
         throw new Error('Dispositivo Bluetooth desconectado');
       }
 
-      // El método write() del BluetoothDevice acepta string o Buffer
-      await bluetoothDevice.write(content);
+      // Enviar datos usando el servicio nativo
+      await LecrepeBluetoothService.sendData(content);
     } catch (error: any) {
       console.error('Error sending to Bluetooth:', error);
       throw error;
@@ -375,4 +287,3 @@ export const useBluetooth = (): BluetoothContextType => {
   }
   return context;
 };
-
