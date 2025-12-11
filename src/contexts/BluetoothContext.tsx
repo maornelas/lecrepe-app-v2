@@ -1,10 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-// import RNBluetoothClassic, { BluetoothDevice } from 'react-native-bluetooth-classic';
+import RNBluetoothClassic, { BluetoothDevice } from 'react-native-bluetooth-classic';
 import { StorageService } from '../services/storageService';
 import { Platform, PermissionsAndroid } from 'react-native';
-
-// Tipo temporal para BluetoothDevice mientras se deshabilita el módulo
-type BluetoothDevice = any;
 
 interface BluetoothContextType {
   isBluetoothEnabled: boolean;
@@ -39,26 +36,29 @@ export const BluetoothProvider: React.FC<{ children: ReactNode }> = ({ children 
     const loadSavedSettings = async () => {
       try {
         const savedUseBluetooth = await StorageService.getItem('useBluetooth');
-        // Bluetooth deshabilitado temporalmente para evitar errores de módulos nativos
-        setUseBluetooth(false);
-        /* COMENTADO TEMPORALMENTE - Bluetooth deshabilitado
+        const savedDeviceAddress = await StorageService.getItem('bluetoothDeviceAddress');
+
         if (savedUseBluetooth === 'true') {
           setUseBluetooth(true);
           // Intentar reconectar al dispositivo guardado
           if (savedDeviceAddress) {
             try {
-              const devices = await RNBluetoothClassic.getBondedDevices();
-              const savedDevice = devices.find(d => d.address === savedDeviceAddress);
-              if (savedDevice) {
-                // Verificar si ya está conectado
-                try {
-                  const isConnected = await savedDevice.isConnected();
-                  if (isConnected) {
-                    setBluetoothDevice(savedDevice);
-                    console.log('✅ Already connected to saved device:', savedDevice.name || savedDeviceAddress);
+              // Verificar que el módulo esté disponible antes de usarlo
+              if (RNBluetoothClassic && typeof RNBluetoothClassic.getBondedDevices === 'function') {
+                const devices = await RNBluetoothClassic.getBondedDevices();
+                const savedDevice = devices.find(d => d.address === savedDeviceAddress);
+                if (savedDevice) {
+                  // Verificar si ya está conectado
+                  try {
+                    const isConnected = await savedDevice.isConnected();
+                    if (isConnected) {
+                      setBluetoothDevice(savedDevice);
+                      console.log('✅ Already connected to saved device:', savedDevice.name || savedDeviceAddress);
+                    }
+                  } catch (error) {
+                    // No está conectado, no hacer nada
+                    console.log('Device not connected:', error);
                   }
-                } catch (error) {
-                  // No está conectado, no hacer nada
                 }
               }
             } catch (error) {
@@ -70,28 +70,28 @@ export const BluetoothProvider: React.FC<{ children: ReactNode }> = ({ children 
         } else {
           setUseBluetooth(true); // Default
         }
-        */
       } catch (error) {
         console.error('Error loading saved settings:', error);
       }
     };
 
     loadSavedSettings();
-    // checkBluetooth(); // Comentado temporalmente
+    checkBluetooth();
   }, []);
 
   const checkBluetooth = async () => {
-    // Bluetooth deshabilitado temporalmente
-    setBluetoothAvailable(false);
-    /* COMENTADO TEMPORALMENTE
     try {
-      const isEnabled = await RNBluetoothClassic.isBluetoothEnabled();
-      setBluetoothAvailable(isEnabled !== undefined && isEnabled !== null);
+      // Verificar que el módulo esté disponible antes de usarlo
+      if (RNBluetoothClassic && typeof RNBluetoothClassic.isBluetoothEnabled === 'function') {
+        const isEnabled = await RNBluetoothClassic.isBluetoothEnabled();
+        setBluetoothAvailable(isEnabled !== undefined && isEnabled !== null);
+      } else {
+        setBluetoothAvailable(false);
+      }
     } catch (error) {
       console.warn('Bluetooth check failed:', error);
       setBluetoothAvailable(false);
     }
-    */
   };
 
   const requestBluetoothPermissions = async (): Promise<boolean> => {
@@ -120,13 +120,15 @@ export const BluetoothProvider: React.FC<{ children: ReactNode }> = ({ children 
   };
 
   const scanBluetoothDevices = async () => {
-    // Bluetooth deshabilitado temporalmente
-    throw new Error('Bluetooth está deshabilitado temporalmente');
-    /* COMENTADO TEMPORALMENTE
     setIsScanning(true);
     setBluetoothDevices([]);
 
     try {
+      // Verificar que el módulo esté disponible
+      if (!RNBluetoothClassic || typeof RNBluetoothClassic.getBondedDevices !== 'function') {
+        throw new Error('El módulo Bluetooth no está disponible');
+      }
+
       const hasPermission = await requestBluetoothPermissions();
       if (!hasPermission) {
         throw new Error('Se necesitan permisos de Bluetooth para escanear dispositivos');
@@ -153,13 +155,14 @@ export const BluetoothProvider: React.FC<{ children: ReactNode }> = ({ children 
     } finally {
       setIsScanning(false);
     }
-    */
   };
 
   const connectBluetoothDevice = async (device: BluetoothDevice) => {
-    // Bluetooth deshabilitado temporalmente
-    throw new Error('Bluetooth está deshabilitado temporalmente');
-    /* COMENTADO TEMPORALMENTE
+    // Verificar que el módulo esté disponible
+    if (!RNBluetoothClassic || typeof RNBluetoothClassic.isBluetoothEnabled !== 'function') {
+      throw new Error('El módulo Bluetooth no está disponible');
+    }
+
     // Desconectar cualquier dispositivo conectado previamente (como kokoro-app)
     if (bluetoothDevice && bluetoothDevice.address !== device.address) {
       try {
@@ -256,14 +259,9 @@ export const BluetoothProvider: React.FC<{ children: ReactNode }> = ({ children 
     } finally {
       setIsConnecting(null);
     }
-    */
   };
 
   const disconnectBluetoothDevice = async () => {
-    // Bluetooth deshabilitado temporalmente
-    setBluetoothDevice(null);
-    setUseBluetooth(false);
-    /* COMENTADO TEMPORALMENTE
     try {
       if (bluetoothDevice) {
         await bluetoothDevice.disconnect();
@@ -280,13 +278,9 @@ export const BluetoothProvider: React.FC<{ children: ReactNode }> = ({ children 
       setUseBluetooth(false);
       throw error;
     }
-    */
   };
 
   const sendToBluetooth = async (content: string) => {
-    // Bluetooth deshabilitado temporalmente
-    throw new Error('Bluetooth está deshabilitado temporalmente');
-    /* COMENTADO TEMPORALMENTE
     if (!bluetoothDevice) {
       throw new Error('No hay dispositivo Bluetooth conectado');
     }
@@ -304,7 +298,6 @@ export const BluetoothProvider: React.FC<{ children: ReactNode }> = ({ children 
       console.error('Error sending to Bluetooth:', error);
       throw error;
     }
-    */
   };
 
   return (

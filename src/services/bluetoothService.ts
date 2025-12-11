@@ -1,10 +1,7 @@
-// import RNBluetoothClassic, {
-//   BluetoothDevice,
-//   BluetoothEventSubscription,
-// } from 'react-native-bluetooth-classic';
-// Bluetooth deshabilitado temporalmente para evitar errores de módulos nativos
-type BluetoothDevice = any;
-type BluetoothEventSubscription = any;
+import RNBluetoothClassic, {
+  BluetoothDevice,
+  BluetoothEventSubscription,
+} from 'react-native-bluetooth-classic';
 import { StorageService } from './storageService';
 import { Platform, PermissionsAndroid } from 'react-native';
 
@@ -23,16 +20,15 @@ export class BluetoothService {
    * Check if Bluetooth is available
    */
   static async isBluetoothAvailable(): Promise<boolean> {
-    // Bluetooth deshabilitado temporalmente
-    return false;
-    /* COMENTADO TEMPORALMENTE
     try {
+      if (!RNBluetoothClassic || typeof RNBluetoothClassic.isBluetoothEnabled !== 'function') {
+        return false;
+      }
       return await RNBluetoothClassic.isBluetoothEnabled();
     } catch (error) {
       console.error('Error checking Bluetooth availability:', error);
       return false;
     }
-    */
   }
 
   /**
@@ -67,10 +63,10 @@ export class BluetoothService {
    * Get paired Bluetooth devices
    */
   static async getPairedDevices(): Promise<BluetoothDevice[]> {
-    // Bluetooth deshabilitado temporalmente
-    return [];
-    /* COMENTADO TEMPORALMENTE
     try {
+      if (!RNBluetoothClassic || typeof RNBluetoothClassic.getBondedDevices !== 'function') {
+        throw new Error('El módulo Bluetooth no está disponible');
+      }
       const devices = await RNBluetoothClassic.getBondedDevices();
       console.log('📱 Paired devices:', devices);
       return devices;
@@ -78,17 +74,16 @@ export class BluetoothService {
       console.error('Error getting paired devices:', error);
       throw error;
     }
-    */
   }
 
   /**
    * Discover Bluetooth devices
    */
   static async discoverDevices(): Promise<BluetoothDevice[]> {
-    // Bluetooth deshabilitado temporalmente
-    return [];
-    /* COMENTADO TEMPORALMENTE
     try {
+      if (!RNBluetoothClassic || typeof RNBluetoothClassic.startDiscovery !== 'function') {
+        throw new Error('El módulo Bluetooth no está disponible');
+      }
       // Start discovery and wait for devices
       await RNBluetoothClassic.startDiscovery();
       
@@ -107,13 +102,14 @@ export class BluetoothService {
       console.error('Error discovering devices:', error);
       // Try to cancel discovery even if there was an error
       try {
-        await RNBluetoothClassic.cancelDiscovery();
+        if (RNBluetoothClassic && typeof RNBluetoothClassic.cancelDiscovery === 'function') {
+          await RNBluetoothClassic.cancelDiscovery();
+        }
       } catch (e) {
         // Ignore cancel errors
       }
       throw error;
     }
-    */
   }
 
   /**
@@ -121,9 +117,9 @@ export class BluetoothService {
    * Similar to kokoro-app: maintains device object in memory
    */
   static async connectToDevice(device: BluetoothDevice): Promise<boolean> {
-    // Bluetooth deshabilitado temporalmente
-    throw new Error('Bluetooth está deshabilitado temporalmente');
-    /* COMENTADO TEMPORALMENTE
+    if (!RNBluetoothClassic) {
+      throw new Error('El módulo Bluetooth no está disponible');
+    }
     try {
       console.log('🔌 Connecting to device:', device.address);
       
@@ -160,17 +156,17 @@ export class BluetoothService {
       this.connectedDevice = null;
       throw new Error(`Error al conectar: ${error.message || 'Error desconocido'}`);
     }
-    */
   }
 
   /**
    * Reconnect to saved device (called on app start)
    */
   static async reconnectToSavedDevice(): Promise<boolean> {
-    // Bluetooth deshabilitado temporalmente
-    return false;
-    /* COMENTADO TEMPORALMENTE
     try {
+      if (!RNBluetoothClassic || typeof RNBluetoothClassic.getBondedDevices !== 'function') {
+        return false;
+      }
+
       const savedDeviceAddress = await StorageService.getItem('bluetoothDeviceAddress');
       const savedUseBluetooth = await StorageService.getItem('useBluetooth');
       
@@ -204,7 +200,6 @@ export class BluetoothService {
       console.error('Error reconnecting to saved device:', error);
       return false;
     }
-    */
   }
 
   /**
@@ -239,11 +234,12 @@ export class BluetoothService {
    * Attempt to reconnect to the saved device
    */
   private static async attemptReconnection(): Promise<void> {
-    // Bluetooth deshabilitado temporalmente
-    this.isReconnecting = false;
-    return;
-    /* COMENTADO TEMPORALMENTE
     if (this.isReconnecting) {
+      return;
+    }
+
+    if (!RNBluetoothClassic || typeof RNBluetoothClassic.getBondedDevices !== 'function') {
+      this.isReconnecting = false;
       return;
     }
 
@@ -279,7 +275,6 @@ export class BluetoothService {
         console.error('❌ Max reconnection attempts reached');
       }
     }
-    */
   }
 
   /**
@@ -345,9 +340,6 @@ export class BluetoothService {
    * Similar to kokoro-app: checks connection and attempts reconnect if needed
    */
   static async sendData(data: string | Uint8Array): Promise<boolean> {
-    // Bluetooth deshabilitado temporalmente
-    throw new Error('Bluetooth está deshabilitado temporalmente');
-    /* COMENTADO TEMPORALMENTE
     try {
       if (!this.connectedDevice) {
         // Try to reconnect to saved device
@@ -387,7 +379,6 @@ export class BluetoothService {
       console.error('❌ Error sending data:', error);
       throw new Error(`Error al enviar datos: ${error.message || 'Error desconocido'}`);
     }
-    */
   }
 
   /**

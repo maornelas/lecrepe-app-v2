@@ -14,9 +14,7 @@ import {
 } from 'react-native';
 import TcpSocket from 'react-native-tcp-socket';
 import NetInfo from '@react-native-community/netinfo';
-// import RNBluetoothClassic, { BluetoothDevice } from 'react-native-bluetooth-classic';
-// Bluetooth deshabilitado temporalmente para evitar errores de módulos nativos
-type BluetoothDevice = any;
+import RNBluetoothClassic, { BluetoothDevice } from 'react-native-bluetooth-classic';
 import { StorageService } from '../services/storageService';
 import { useBluetooth } from '../contexts/BluetoothContext';
 
