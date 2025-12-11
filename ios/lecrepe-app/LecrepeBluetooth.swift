@@ -87,7 +87,7 @@ class LecrepeBluetooth: NSObject {
       return
     }
     
-    guard outputStream.streamStatus == .open else {
+    if outputStream.streamStatus != .open {
       outputStream.open()
     }
     
