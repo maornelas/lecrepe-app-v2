@@ -8,23 +8,12 @@
 import Foundation
 import ExternalAccessory
 import CoreBluetooth
-import React
 
 @objc(LecrepeBluetooth)
-class LecrepeBluetooth: NSObject, RCTBridgeModule {
+class LecrepeBluetooth: NSObject {
   
   private var connectedAccessory: EAAccessory?
   private var session: EASession?
-  
-  @objc
-  static func requiresMainQueueSetup() -> Bool {
-    return false
-  }
-  
-  @objc
-  static func moduleName() -> String! {
-    return "LecrepeBluetooth"
-  }
   
   @objc
   func isBluetoothEnabled(_ resolve: @escaping RCTPromiseResolveBlock, rejecter reject: @escaping RCTPromiseRejectBlock) {
@@ -35,7 +24,7 @@ class LecrepeBluetooth: NSObject, RCTBridgeModule {
   }
   
   @objc
-  func getBondedDevices(_ resolve: @escaping RCTPromiseResolveBlock, rejecter reject: @escaping RCTPromiseRejectBlock) {
+  func getBondedDevices(_ resolve: @escaping ([[String: Any]]) -> Void, rejecter reject: @escaping (String, String, NSError?) -> Void) {
     let manager = EAAccessoryManager.shared()
     let accessories = manager.connectedAccessories
     
@@ -52,7 +41,7 @@ class LecrepeBluetooth: NSObject, RCTBridgeModule {
   }
   
   @objc
-  func connectToDevice(_ deviceId: String, resolver resolve: @escaping RCTPromiseResolveBlock, rejecter reject: @escaping RCTPromiseRejectBlock) {
+  func connectToDevice(_ deviceId: String, resolver resolve: @escaping (Bool) -> Void, rejecter reject: @escaping (String, String, NSError?) -> Void) {
     let manager = EAAccessoryManager.shared()
     let accessories = manager.connectedAccessories
     
@@ -75,7 +64,7 @@ class LecrepeBluetooth: NSObject, RCTBridgeModule {
   }
   
   @objc
-  func disconnectFromDevice(_ deviceId: String, resolver resolve: @escaping RCTPromiseResolveBlock, rejecter reject: @escaping RCTPromiseRejectBlock) {
+  func disconnectFromDevice(_ deviceId: String, resolver resolve: @escaping (Bool) -> Void, rejecter reject: @escaping (String, String, NSError?) -> Void) {
     session?.outputStream?.close()
     session?.inputStream?.close()
     session = nil
@@ -84,13 +73,13 @@ class LecrepeBluetooth: NSObject, RCTBridgeModule {
   }
   
   @objc
-  func isDeviceConnected(_ deviceId: String, resolver resolve: @escaping RCTPromiseResolveBlock, rejecter reject: @escaping RCTPromiseRejectBlock) {
+  func isDeviceConnected(_ deviceId: String, resolver resolve: @escaping (Bool) -> Void, rejecter reject: @escaping (String, String, NSError?) -> Void) {
     let isConnected = connectedAccessory?.serialNumber == deviceId && session != nil
     resolve(isConnected)
   }
   
   @objc
-  func writeToDevice(_ deviceId: String, message: String, resolver resolve: @escaping RCTPromiseResolveBlock, rejecter reject: @escaping RCTPromiseRejectBlock) {
+  func writeToDevice(_ deviceId: String, message: String, resolver resolve: @escaping (Bool) -> Void, rejecter reject: @escaping (String, String, NSError?) -> Void) {
     guard let session = session,
           let outputStream = session.outputStream,
           connectedAccessory?.serialNumber == deviceId else {
