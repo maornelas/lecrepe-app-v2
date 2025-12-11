@@ -1,5 +1,16 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import RNBluetoothClassic, { BluetoothDevice } from 'react-native-bluetooth-classic';
+// Lazy import para evitar errores de inicialización
+let RNBluetoothClassic: any = null;
+let BluetoothDevice: any = null;
+
+try {
+  const bluetoothModule = require('react-native-bluetooth-classic');
+  RNBluetoothClassic = bluetoothModule.default || bluetoothModule;
+  BluetoothDevice = bluetoothModule.BluetoothDevice;
+} catch (error) {
+  console.warn('Bluetooth module not available:', error);
+}
+
 import { StorageService } from '../services/storageService';
 import { Platform, PermissionsAndroid } from 'react-native';
 
@@ -81,6 +92,18 @@ export const BluetoothProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   const checkBluetooth = async () => {
     try {
+      // Lazy load del módulo si no está disponible
+      if (!RNBluetoothClassic) {
+        try {
+          const bluetoothModule = require('react-native-bluetooth-classic');
+          RNBluetoothClassic = bluetoothModule.default || bluetoothModule;
+        } catch (e) {
+          console.warn('Bluetooth module not available:', e);
+          setBluetoothAvailable(false);
+          return;
+        }
+      }
+
       // Verificar que el módulo esté disponible antes de usarlo
       if (RNBluetoothClassic && typeof RNBluetoothClassic.isBluetoothEnabled === 'function') {
         const isEnabled = await RNBluetoothClassic.isBluetoothEnabled();
@@ -124,6 +147,16 @@ export const BluetoothProvider: React.FC<{ children: ReactNode }> = ({ children 
     setBluetoothDevices([]);
 
     try {
+      // Lazy load del módulo si no está disponible
+      if (!RNBluetoothClassic) {
+        try {
+          const bluetoothModule = require('react-native-bluetooth-classic');
+          RNBluetoothClassic = bluetoothModule.default || bluetoothModule;
+        } catch (e) {
+          throw new Error('El módulo Bluetooth no está disponible');
+        }
+      }
+
       // Verificar que el módulo esté disponible
       if (!RNBluetoothClassic || typeof RNBluetoothClassic.getBondedDevices !== 'function') {
         throw new Error('El módulo Bluetooth no está disponible');
@@ -158,6 +191,16 @@ export const BluetoothProvider: React.FC<{ children: ReactNode }> = ({ children 
   };
 
   const connectBluetoothDevice = async (device: BluetoothDevice) => {
+    // Lazy load del módulo si no está disponible
+    if (!RNBluetoothClassic) {
+      try {
+        const bluetoothModule = require('react-native-bluetooth-classic');
+        RNBluetoothClassic = bluetoothModule.default || bluetoothModule;
+      } catch (e) {
+        throw new Error('El módulo Bluetooth no está disponible');
+      }
+    }
+
     // Verificar que el módulo esté disponible
     if (!RNBluetoothClassic || typeof RNBluetoothClassic.isBluetoothEnabled !== 'function') {
       throw new Error('El módulo Bluetooth no está disponible');
