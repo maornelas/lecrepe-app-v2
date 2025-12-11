@@ -20,7 +20,7 @@
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = "lecrepe-app/Images.xcassets"; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = "lecrepe-app/Info.plist"; sourceTree = "<group>"; };
 		13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = PrivacyInfo.xcprivacy; path = "lecrepe-app/PrivacyInfo.xcprivacy"; sourceTree = "<group>"; };
-		2B7325A12B0A5F2796400A13 /* logo-lecrepe.png */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = image.png; path = "logo-lecrepe.png"; sourceTree = "<group>"; };
+		2B7325A12B0A5F2796400A13 /* logo-lecrepe.png */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = image.png; name = "logo-lecrepe.png"; path = "lecrepe-app/logo-lecrepe.png"; sourceTree = "<group>"; };
 		3B4392A12AC88292D35C810B /* Pods-lecrepeapp.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-lecrepeapp.debug.xcconfig"; path = "Target Support Files/Pods-lecrepeapp/Pods-lecrepeapp.debug.xcconfig"; sourceTree = "<group>"; };
 		5709B34CF0A7D63546082F79 /* Pods-lecrepeapp.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-lecrepeapp.release.xcconfig"; path = "Target Support Files/Pods-lecrepeapp/Pods-lecrepeapp.release.xcconfig"; sourceTree = "<group>"; };
 		64687FDCA02226ADEDB9DA05 /* Pods-lecrepe-app.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-lecrepe-app.release.xcconfig"; path = "Target Support Files/Pods-lecrepe-app/Pods-lecrepe-app.release.xcconfig"; sourceTree = "<group>"; };
@@ -284,8 +284,12 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.marcoornelas.lecrepeapp;
 				PRODUCT_NAME = "lecrepe-app";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
 				VERSIONING_SYSTEM = "apple-generic";
 			};
 			name = Debug;
@@ -312,7 +316,11 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.marcoornelas.lecrepeapp;
 				PRODUCT_NAME = "lecrepe-app";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
 				VERSIONING_SYSTEM = "apple-generic";
 			};
 			name = Release;

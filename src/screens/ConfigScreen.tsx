@@ -11,11 +11,12 @@ import {
   TextInput,
   Platform,
   PermissionsAndroid,
-  NativeModules,
 } from 'react-native';
 import TcpSocket from 'react-native-tcp-socket';
 import NetInfo from '@react-native-community/netinfo';
-import RNBluetoothClassic, { BluetoothDevice } from 'react-native-bluetooth-classic';
+// import RNBluetoothClassic, { BluetoothDevice } from 'react-native-bluetooth-classic';
+// Bluetooth deshabilitado temporalmente para evitar errores de módulos nativos
+type BluetoothDevice = any;
 import { StorageService } from '../services/storageService';
 import { useBluetooth } from '../contexts/BluetoothContext';
 
@@ -138,26 +139,6 @@ const ConfigScreen: React.FC<ConfigScreenProps> = ({ navigation }) => {
   };
 
 
-  // Función para obtener el logo en formato ESC/POS
-  const getLogoEscPos = async (printerWidth: number): Promise<string> => {
-    try {
-      // Intentar usar el módulo nativo de iOS si está disponible
-      if (Platform.OS === 'ios' && NativeModules.ImageToEscPos) {
-        const logoBase64 = await NativeModules.ImageToEscPos.convertImageToEscPos('', printerWidth);
-        // Convertir base64 a string binario
-        const logoBinary = atob(logoBase64);
-        let logoString = '';
-        for (let i = 0; i < logoBinary.length; i++) {
-          logoString += logoBinary.charAt(i);
-        }
-        return logoString;
-      }
-    } catch (error) {
-      console.log('No se pudo cargar el logo, continuando sin logo:', error);
-    }
-    // Si no se puede cargar el logo, retornar string vacío
-    return '';
-  };
 
   // Función para remover acentos
   const removeAccents = (str: string): string => {
@@ -201,9 +182,8 @@ const ConfigScreen: React.FC<ConfigScreenProps> = ({ navigation }) => {
     const smallSize = ESC + '!' + '\x00'; // Tamaño pequeño/normal
 
     try {
-      // Obtener el logo en formato ESC/POS
-      const printerWidth = isBluetoothEnabled ? 384 : 576; // 58mm: 384px, 80mm: 576px
-      const logoEscPos = await getLogoEscPos(printerWidth);
+      // Logo deshabilitado - no se carga para evitar conflictos
+      const logoEscPos = '';
 
       // Crear el contenido completo del ticket
       const testContent = resetFormat + smallSize +

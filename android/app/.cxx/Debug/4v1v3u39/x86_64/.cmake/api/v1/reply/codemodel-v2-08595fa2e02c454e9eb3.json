@@ -150,7 +150,7 @@
 				{
 					"directoryIndex" : 0,
 					"id" : "appmodules::@6890427a1f51a3e7e1df",
-					"jsonFile" : "target-appmodules-Debug-9e6a7f8f1d29d0fd192a.json",
+					"jsonFile" : "target-appmodules-Debug-3687036a297eed5e57f3.json",
 					"name" : "appmodules",
 					"projectIndex" : 0
 				},
@@ -178,21 +178,21 @@
 				{
 					"directoryIndex" : 5,
 					"id" : "react_codegen_rnscreens::@25bcbd507e98d3a854ad",
-					"jsonFile" : "target-react_codegen_rnscreens-Debug-cd32180e75f4cdf47547.json",
+					"jsonFile" : "target-react_codegen_rnscreens-Debug-92beff8e272de05de051.json",
 					"name" : "react_codegen_rnscreens",
 					"projectIndex" : 0
 				},
 				{
 					"directoryIndex" : 6,
 					"id" : "react_codegen_rnsvg::@4f40eb209d0c0b4a3b65",
-					"jsonFile" : "target-react_codegen_rnsvg-Debug-37e7e191fa39e938c0a2.json",
+					"jsonFile" : "target-react_codegen_rnsvg-Debug-ef43a2f9ba798ff6e138.json",
 					"name" : "react_codegen_rnsvg",
 					"projectIndex" : 0
 				},
 				{
 					"directoryIndex" : 4,
 					"id" : "react_codegen_safeareacontext::@7984cd80db47aa7b952a",
-					"jsonFile" : "target-react_codegen_safeareacontext-Debug-7b221827772e6b6be633.json",
+					"jsonFile" : "target-react_codegen_safeareacontext-Debug-7d19e35274f008eb61be.json",
 					"name" : "react_codegen_safeareacontext",
 					"projectIndex" : 0
 				}
@@ -202,7 +202,7 @@
 	"kind" : "codemodel",
 	"paths" : 
 	{
-		"build" : "/Users/marko/Code/lecrepe/lecrepe-app-v2/android/app/.cxx/Debug/4v1v3u39/arm64-v8a",
+		"build" : "/Users/marko/Code/lecrepe/lecrepe-app-v2/android/app/.cxx/Debug/4v1v3u39/x86_64",
 		"source" : "/Users/marko/Code/lecrepe/lecrepe-app-v2/node_modules/react-native/ReactAndroid/cmake-utils/default-app-setup"
 	},
 	"version" : 

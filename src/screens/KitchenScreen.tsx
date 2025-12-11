@@ -10,7 +10,6 @@ import {
   RefreshControl,
   Alert,
   Modal,
-  NativeModules,
   Platform,
 } from 'react-native';
 import TcpSocket from 'react-native-tcp-socket';
@@ -199,33 +198,6 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({ navigation }) => {
     return items.reduce((sum, item) => sum + ((item.type_price || 0) * (item.units || 0)), 0);
   };
 
-  // Función helper para obtener el logo en formato ESC/POS
-  const getLogoEscPos = async (printerWidth: number): Promise<string> => {
-    try {
-      // Intentar usar el módulo nativo de iOS si está disponible
-      if (Platform.OS === 'ios' && NativeModules.ImageToEscPos) {
-        console.log('🖼️ Intentando cargar logo para iOS, ancho:', printerWidth);
-        const logoBase64 = await NativeModules.ImageToEscPos.convertImageToEscPos('', printerWidth);
-        console.log('✅ Logo cargado exitosamente, longitud base64:', logoBase64.length);
-        // Convertir base64 a string binario
-        const logoBinary = atob(logoBase64);
-        let logoString = '';
-        for (let i = 0; i < logoBinary.length; i++) {
-          logoString += logoBinary.charAt(i);
-        }
-        console.log('✅ Logo convertido a string binario, longitud:', logoString.length);
-        return logoString;
-      } else if (Platform.OS === 'android') {
-        console.log('⚠️ Android: Logo no soportado aún, continuando sin logo');
-      } else {
-        console.log('⚠️ Plataforma no soportada para logo:', Platform.OS);
-      }
-    } catch (error) {
-      console.error('❌ Error al cargar el logo:', error);
-    }
-    // Si no se puede cargar el logo, retornar string vacío
-    return '';
-  };
 
   const handlePrintOrder = async () => {
     if (!selectedOrder) {
@@ -283,9 +255,8 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({ navigation }) => {
       const smallSize = ESC + '!' + '\x00'; // Tamaño pequeño/normal
       const normalSize = ESC + '!' + '\x00';
 
-      // Obtener el logo en formato ESC/POS
-      const printerWidth = isBluetoothEnabled ? 384 : 576; // 58mm: 384px, 80mm: 576px
-      const logoEscPos = await getLogoEscPos(printerWidth);
+      // Logo deshabilitado - no se carga para evitar conflictos
+      const logoEscPos = '';
 
       let salida = "";
       let total = 0;

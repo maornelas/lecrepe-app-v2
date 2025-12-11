@@ -1,7 +1,10 @@
-import RNBluetoothClassic, {
-  BluetoothDevice,
-  BluetoothEventSubscription,
-} from 'react-native-bluetooth-classic';
+// import RNBluetoothClassic, {
+//   BluetoothDevice,
+//   BluetoothEventSubscription,
+// } from 'react-native-bluetooth-classic';
+// Bluetooth deshabilitado temporalmente para evitar errores de módulos nativos
+type BluetoothDevice = any;
+type BluetoothEventSubscription = any;
 import { StorageService } from './storageService';
 import { Platform, PermissionsAndroid } from 'react-native';
 
@@ -20,12 +23,16 @@ export class BluetoothService {
    * Check if Bluetooth is available
    */
   static async isBluetoothAvailable(): Promise<boolean> {
+    // Bluetooth deshabilitado temporalmente
+    return false;
+    /* COMENTADO TEMPORALMENTE
     try {
       return await RNBluetoothClassic.isBluetoothEnabled();
     } catch (error) {
       console.error('Error checking Bluetooth availability:', error);
       return false;
     }
+    */
   }
 
   /**
@@ -60,6 +67,9 @@ export class BluetoothService {
    * Get paired Bluetooth devices
    */
   static async getPairedDevices(): Promise<BluetoothDevice[]> {
+    // Bluetooth deshabilitado temporalmente
+    return [];
+    /* COMENTADO TEMPORALMENTE
     try {
       const devices = await RNBluetoothClassic.getBondedDevices();
       console.log('📱 Paired devices:', devices);
@@ -68,12 +78,16 @@ export class BluetoothService {
       console.error('Error getting paired devices:', error);
       throw error;
     }
+    */
   }
 
   /**
    * Discover Bluetooth devices
    */
   static async discoverDevices(): Promise<BluetoothDevice[]> {
+    // Bluetooth deshabilitado temporalmente
+    return [];
+    /* COMENTADO TEMPORALMENTE
     try {
       // Start discovery and wait for devices
       await RNBluetoothClassic.startDiscovery();
@@ -99,6 +113,7 @@ export class BluetoothService {
       }
       throw error;
     }
+    */
   }
 
   /**
@@ -106,6 +121,9 @@ export class BluetoothService {
    * Similar to kokoro-app: maintains device object in memory
    */
   static async connectToDevice(device: BluetoothDevice): Promise<boolean> {
+    // Bluetooth deshabilitado temporalmente
+    throw new Error('Bluetooth está deshabilitado temporalmente');
+    /* COMENTADO TEMPORALMENTE
     try {
       console.log('🔌 Connecting to device:', device.address);
       
@@ -142,12 +160,16 @@ export class BluetoothService {
       this.connectedDevice = null;
       throw new Error(`Error al conectar: ${error.message || 'Error desconocido'}`);
     }
+    */
   }
 
   /**
    * Reconnect to saved device (called on app start)
    */
   static async reconnectToSavedDevice(): Promise<boolean> {
+    // Bluetooth deshabilitado temporalmente
+    return false;
+    /* COMENTADO TEMPORALMENTE
     try {
       const savedDeviceAddress = await StorageService.getItem('bluetoothDeviceAddress');
       const savedUseBluetooth = await StorageService.getItem('useBluetooth');
@@ -182,6 +204,7 @@ export class BluetoothService {
       console.error('Error reconnecting to saved device:', error);
       return false;
     }
+    */
   }
 
   /**
@@ -216,6 +239,10 @@ export class BluetoothService {
    * Attempt to reconnect to the saved device
    */
   private static async attemptReconnection(): Promise<void> {
+    // Bluetooth deshabilitado temporalmente
+    this.isReconnecting = false;
+    return;
+    /* COMENTADO TEMPORALMENTE
     if (this.isReconnecting) {
       return;
     }
@@ -252,6 +279,7 @@ export class BluetoothService {
         console.error('❌ Max reconnection attempts reached');
       }
     }
+    */
   }
 
   /**
@@ -317,6 +345,9 @@ export class BluetoothService {
    * Similar to kokoro-app: checks connection and attempts reconnect if needed
    */
   static async sendData(data: string | Uint8Array): Promise<boolean> {
+    // Bluetooth deshabilitado temporalmente
+    throw new Error('Bluetooth está deshabilitado temporalmente');
+    /* COMENTADO TEMPORALMENTE
     try {
       if (!this.connectedDevice) {
         // Try to reconnect to saved device
@@ -356,6 +387,7 @@ export class BluetoothService {
       console.error('❌ Error sending data:', error);
       throw new Error(`Error al enviar datos: ${error.message || 'Error desconocido'}`);
     }
+    */
   }
 
   /**

@@ -10,11 +10,12 @@ import {
   ActivityIndicator,
   Alert,
   Dimensions,
-  NativeModules,
   Platform,
 } from 'react-native';
 import TcpSocket from 'react-native-tcp-socket';
-import RNBluetoothClassic, { BluetoothDevice } from 'react-native-bluetooth-classic';
+// import RNBluetoothClassic, { BluetoothDevice } from 'react-native-bluetooth-classic';
+// Bluetooth deshabilitado temporalmente para evitar errores de módulos nativos
+type BluetoothDevice = any;
 import { ProductService, Product } from '../services/productService';
 import { OrderLecrepeService } from '../services/orderLecrepeService';
 import { StorageService } from '../services/storageService';
@@ -618,33 +619,6 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
     }
   };
 
-  // Función helper para obtener el logo en formato ESC/POS
-  const getLogoEscPos = async (printerWidth: number): Promise<string> => {
-    try {
-      // Intentar usar el módulo nativo de iOS si está disponible
-      if (Platform.OS === 'ios' && NativeModules.ImageToEscPos) {
-        console.log('🖼️ Intentando cargar logo para iOS, ancho:', printerWidth);
-        const logoBase64 = await NativeModules.ImageToEscPos.convertImageToEscPos('', printerWidth);
-        console.log('✅ Logo cargado exitosamente, longitud base64:', logoBase64.length);
-        // Convertir base64 a string binario
-        const logoBinary = atob(logoBase64);
-        let logoString = '';
-        for (let i = 0; i < logoBinary.length; i++) {
-          logoString += logoBinary.charAt(i);
-        }
-        console.log('✅ Logo convertido a string binario, longitud:', logoString.length);
-        return logoString;
-      } else if (Platform.OS === 'android') {
-        console.log('⚠️ Android: Logo no soportado aún, continuando sin logo');
-      } else {
-        console.log('⚠️ Plataforma no soportada para logo:', Platform.OS);
-      }
-    } catch (error) {
-      console.error('❌ Error al cargar el logo:', error);
-    }
-    // Si no se puede cargar el logo, retornar string vacío
-    return '';
-  };
 
   const handlePrintOrder = async () => {
     if (orderItems.length === 0) {
@@ -703,9 +677,8 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
       const smallSize = ESC + '!' + '\x00'; // Tamaño pequeño/normal
       const normalSize = ESC + '!' + '\x00'; // Tamaño normal
 
-      // Obtener el logo en formato ESC/POS
-      const printerWidth = isBluetoothEnabled ? 384 : 576; // 58mm: 384px, 80mm: 576px
-      const logoEscPos = await getLogoEscPos(printerWidth);
+      // Logo deshabilitado - no se carga para evitar conflictos
+      const logoEscPos = '';
 
       let salida = "";
       let total = 0;

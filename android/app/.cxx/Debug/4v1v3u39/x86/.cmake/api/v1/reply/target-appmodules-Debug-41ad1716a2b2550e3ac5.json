@@ -2,7 +2,7 @@
 	"artifacts" : 
 	[
 		{
-			"path" : "/Users/marko/Code/lecrepe/lecrepe-app-v2/android/app/build/intermediates/cxx/RelWithDebInfo/192j65fl/obj/arm64-v8a/libappmodules.so"
+			"path" : "/Users/marko/Code/lecrepe/lecrepe-app-v2/android/app/build/intermediates/cxx/Debug/4v1v3u39/obj/x86/libappmodules.so"
 		}
 	],
 	"backtrace" : 3,
@@ -109,7 +109,7 @@
 			"compileCommandFragments" : 
 			[
 				{
-					"fragment" : "-g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D__BIONIC_NO_PAGE_SIZE_MACRO -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security   -O2 -g -DNDEBUG -fPIC"
+					"fragment" : "-g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D__BIONIC_NO_PAGE_SIZE_MACRO -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security   -fno-limit-debug-info  -fPIC"
 				},
 				{
 					"backtrace" : 7,
@@ -280,12 +280,12 @@
 				{
 					"backtrace" : 5,
 					"isSystem" : true,
-					"path" : "/Users/marko/.gradle/caches/8.13/transforms/b142e6f75603c774d9881af962aaafa7/transformed/react-android-0.82.1-release/prefab/modules/jsi/include"
+					"path" : "/Users/marko/.gradle/caches/8.13/transforms/1a605be92e232fc57f5124a2f7631a5e/transformed/react-android-0.82.1-debug/prefab/modules/jsi/include"
 				},
 				{
 					"backtrace" : 5,
 					"isSystem" : true,
-					"path" : "/Users/marko/.gradle/caches/8.13/transforms/b142e6f75603c774d9881af962aaafa7/transformed/react-android-0.82.1-release/prefab/modules/reactnative/include"
+					"path" : "/Users/marko/.gradle/caches/8.13/transforms/1a605be92e232fc57f5124a2f7631a5e/transformed/react-android-0.82.1-debug/prefab/modules/reactnative/include"
 				}
 			],
 			"language" : "CXX",
@@ -304,6 +304,18 @@
 	[
 		{
 			"backtrace" : 4,
+			"id" : "react_codegen_rnscreens::@25bcbd507e98d3a854ad"
+		},
+		{
+			"backtrace" : 4,
+			"id" : "react_codegen_rnsvg::@4f40eb209d0c0b4a3b65"
+		},
+		{
+			"backtrace" : 4,
+			"id" : "react_codegen_rnasyncstorage::@1596841e19ec5b9eeffe"
+		},
+		{
+			"backtrace" : 4,
 			"id" : "react_codegen_rngesturehandler_codegen::@39f233abcd2c728bc6ec"
 		},
 		{
@@ -312,19 +324,7 @@
 		},
 		{
 			"backtrace" : 4,
-			"id" : "react_codegen_rnasyncstorage::@1596841e19ec5b9eeffe"
-		},
-		{
-			"backtrace" : 4,
 			"id" : "react_codegen_safeareacontext::@7984cd80db47aa7b952a"
-		},
-		{
-			"backtrace" : 4,
-			"id" : "react_codegen_rnscreens::@25bcbd507e98d3a854ad"
-		},
-		{
-			"backtrace" : 4,
-			"id" : "react_codegen_rnsvg::@4f40eb209d0c0b4a3b65"
 		}
 	],
 	"id" : "appmodules::@6890427a1f51a3e7e1df",
@@ -333,37 +333,37 @@
 		"commandFragments" : 
 		[
 			{
-				"fragment" : "-Wl,-z,max-page-size=16384 -Wl,--build-id=sha1 -Wl,--no-rosegment -Wl,--no-undefined-version -Wl,--fatal-warnings -Wl,--no-undefined -Qunused-arguments  -Wl,--gc-sections",
+				"fragment" : "-Wl,--build-id=sha1 -Wl,--no-rosegment -Wl,--no-undefined-version -Wl,--fatal-warnings -Wl,--no-undefined -Qunused-arguments",
 				"role" : "flags"
 			},
 			{
 				"backtrace" : 4,
-				"fragment" : "/Users/marko/Code/lecrepe/lecrepe-app-v2/android/app/build/intermediates/cxx/RelWithDebInfo/192j65fl/obj/arm64-v8a/libreact_codegen_safeareacontext.so",
+				"fragment" : "/Users/marko/Code/lecrepe/lecrepe-app-v2/android/app/build/intermediates/cxx/Debug/4v1v3u39/obj/x86/libreact_codegen_safeareacontext.so",
 				"role" : "libraries"
 			},
 			{
 				"backtrace" : 4,
-				"fragment" : "/Users/marko/Code/lecrepe/lecrepe-app-v2/android/app/build/intermediates/cxx/RelWithDebInfo/192j65fl/obj/arm64-v8a/libreact_codegen_rnscreens.so",
+				"fragment" : "/Users/marko/Code/lecrepe/lecrepe-app-v2/android/app/build/intermediates/cxx/Debug/4v1v3u39/obj/x86/libreact_codegen_rnscreens.so",
 				"role" : "libraries"
 			},
 			{
 				"backtrace" : 4,
-				"fragment" : "/Users/marko/Code/lecrepe/lecrepe-app-v2/android/app/build/intermediates/cxx/RelWithDebInfo/192j65fl/obj/arm64-v8a/libreact_codegen_rnsvg.so",
+				"fragment" : "/Users/marko/Code/lecrepe/lecrepe-app-v2/android/app/build/intermediates/cxx/Debug/4v1v3u39/obj/x86/libreact_codegen_rnsvg.so",
 				"role" : "libraries"
 			},
 			{
 				"backtrace" : 5,
-				"fragment" : "/Users/marko/.gradle/caches/8.13/transforms/066ab4ee048cd2b737a2cef809d0db8a/transformed/fbjni-0.7.0/prefab/modules/fbjni/libs/android.arm64-v8a/libfbjni.so",
+				"fragment" : "/Users/marko/.gradle/caches/8.13/transforms/066ab4ee048cd2b737a2cef809d0db8a/transformed/fbjni-0.7.0/prefab/modules/fbjni/libs/android.x86/libfbjni.so",
 				"role" : "libraries"
 			},
 			{
 				"backtrace" : 5,
-				"fragment" : "/Users/marko/.gradle/caches/8.13/transforms/b142e6f75603c774d9881af962aaafa7/transformed/react-android-0.82.1-release/prefab/modules/jsi/libs/android.arm64-v8a/libjsi.so",
+				"fragment" : "/Users/marko/.gradle/caches/8.13/transforms/1a605be92e232fc57f5124a2f7631a5e/transformed/react-android-0.82.1-debug/prefab/modules/jsi/libs/android.x86/libjsi.so",
 				"role" : "libraries"
 			},
 			{
 				"backtrace" : 5,
-				"fragment" : "/Users/marko/.gradle/caches/8.13/transforms/b142e6f75603c774d9881af962aaafa7/transformed/react-android-0.82.1-release/prefab/modules/reactnative/libs/android.arm64-v8a/libreactnative.so",
+				"fragment" : "/Users/marko/.gradle/caches/8.13/transforms/1a605be92e232fc57f5124a2f7631a5e/transformed/react-android-0.82.1-debug/prefab/modules/reactnative/libs/android.x86/libreactnative.so",
 				"role" : "libraries"
 			},
 			{
@@ -439,127 +439,127 @@
 		{
 			"backtrace" : 4,
 			"isGenerated" : true,
-			"path" : "/Users/marko/Code/lecrepe/lecrepe-app-v2/android/app/.cxx/RelWithDebInfo/192j65fl/arm64-v8a/rnasyncstorage_autolinked_build/CMakeFiles/react_codegen_rnasyncstorage.dir/react/renderer/components/rnasyncstorage/ComponentDescriptors.cpp.o",
+			"path" : "/Users/marko/Code/lecrepe/lecrepe-app-v2/android/app/.cxx/Debug/4v1v3u39/x86/rnasyncstorage_autolinked_build/CMakeFiles/react_codegen_rnasyncstorage.dir/react/renderer/components/rnasyncstorage/ComponentDescriptors.cpp.o",
 			"sourceGroupIndex" : 1
 		},
 		{
 			"backtrace" : 4,
 			"isGenerated" : true,
-			"path" : "/Users/marko/Code/lecrepe/lecrepe-app-v2/android/app/.cxx/RelWithDebInfo/192j65fl/arm64-v8a/rnasyncstorage_autolinked_build/CMakeFiles/react_codegen_rnasyncstorage.dir/react/renderer/components/rnasyncstorage/EventEmitters.cpp.o",
+			"path" : "/Users/marko/Code/lecrepe/lecrepe-app-v2/android/app/.cxx/Debug/4v1v3u39/x86/rnasyncstorage_autolinked_build/CMakeFiles/react_codegen_rnasyncstorage.dir/react/renderer/components/rnasyncstorage/EventEmitters.cpp.o",
 			"sourceGroupIndex" : 1
 		},
 		{
 			"backtrace" : 4,
 			"isGenerated" : true,
-			"path" : "/Users/marko/Code/lecrepe/lecrepe-app-v2/android/app/.cxx/RelWithDebInfo/192j65fl/arm64-v8a/rnasyncstorage_autolinked_build/CMakeFiles/react_codegen_rnasyncstorage.dir/react/renderer/components/rnasyncstorage/Props.cpp.o",
+			"path" : "/Users/marko/Code/lecrepe/lecrepe-app-v2/android/app/.cxx/Debug/4v1v3u39/x86/rnasyncstorage_autolinked_build/CMakeFiles/react_codegen_rnasyncstorage.dir/react/renderer/components/rnasyncstorage/Props.cpp.o",
 			"sourceGroupIndex" : 1
 		},
 		{
 			"backtrace" : 4,
 			"isGenerated" : true,
-			"path" : "/Users/marko/Code/lecrepe/lecrepe-app-v2/android/app/.cxx/RelWithDebInfo/192j65fl/arm64-v8a/rnasyncstorage_autolinked_build/CMakeFiles/react_codegen_rnasyncstorage.dir/react/renderer/components/rnasyncstorage/ShadowNodes.cpp.o",
+			"path" : "/Users/marko/Code/lecrepe/lecrepe-app-v2/android/app/.cxx/Debug/4v1v3u39/x86/rnasyncstorage_autolinked_build/CMakeFiles/react_codegen_rnasyncstorage.dir/react/renderer/components/rnasyncstorage/ShadowNodes.cpp.o",
 			"sourceGroupIndex" : 1
 		},
 		{
 			"backtrace" : 4,
 			"isGenerated" : true,
-			"path" : "/Users/marko/Code/lecrepe/lecrepe-app-v2/android/app/.cxx/RelWithDebInfo/192j65fl/arm64-v8a/rnasyncstorage_autolinked_build/CMakeFiles/react_codegen_rnasyncstorage.dir/react/renderer/components/rnasyncstorage/States.cpp.o",
+			"path" : "/Users/marko/Code/lecrepe/lecrepe-app-v2/android/app/.cxx/Debug/4v1v3u39/x86/rnasyncstorage_autolinked_build/CMakeFiles/react_codegen_rnasyncstorage.dir/react/renderer/components/rnasyncstorage/States.cpp.o",
 			"sourceGroupIndex" : 1
 		},
 		{
 			"backtrace" : 4,
 			"isGenerated" : true,
-			"path" : "/Users/marko/Code/lecrepe/lecrepe-app-v2/android/app/.cxx/RelWithDebInfo/192j65fl/arm64-v8a/rnasyncstorage_autolinked_build/CMakeFiles/react_codegen_rnasyncstorage.dir/react/renderer/components/rnasyncstorage/rnasyncstorageJSI-generated.cpp.o",
+			"path" : "/Users/marko/Code/lecrepe/lecrepe-app-v2/android/app/.cxx/Debug/4v1v3u39/x86/rnasyncstorage_autolinked_build/CMakeFiles/react_codegen_rnasyncstorage.dir/react/renderer/components/rnasyncstorage/rnasyncstorageJSI-generated.cpp.o",
 			"sourceGroupIndex" : 1
 		},
 		{
 			"backtrace" : 4,
 			"isGenerated" : true,
-			"path" : "/Users/marko/Code/lecrepe/lecrepe-app-v2/android/app/.cxx/RelWithDebInfo/192j65fl/arm64-v8a/rnasyncstorage_autolinked_build/CMakeFiles/react_codegen_rnasyncstorage.dir/rnasyncstorage-generated.cpp.o",
+			"path" : "/Users/marko/Code/lecrepe/lecrepe-app-v2/android/app/.cxx/Debug/4v1v3u39/x86/rnasyncstorage_autolinked_build/CMakeFiles/react_codegen_rnasyncstorage.dir/rnasyncstorage-generated.cpp.o",
 			"sourceGroupIndex" : 1
 		},
 		{
 			"backtrace" : 4,
 			"isGenerated" : true,
-			"path" : "/Users/marko/Code/lecrepe/lecrepe-app-v2/android/app/.cxx/RelWithDebInfo/192j65fl/arm64-v8a/rngesturehandler_codegen_autolinked_build/CMakeFiles/react_codegen_rngesturehandler_codegen.dir/react/renderer/components/rngesturehandler_codegen/ComponentDescriptors.cpp.o",
+			"path" : "/Users/marko/Code/lecrepe/lecrepe-app-v2/android/app/.cxx/Debug/4v1v3u39/x86/rngesturehandler_codegen_autolinked_build/CMakeFiles/react_codegen_rngesturehandler_codegen.dir/react/renderer/components/rngesturehandler_codegen/ComponentDescriptors.cpp.o",
 			"sourceGroupIndex" : 1
 		},
 		{
 			"backtrace" : 4,
 			"isGenerated" : true,
-			"path" : "/Users/marko/Code/lecrepe/lecrepe-app-v2/android/app/.cxx/RelWithDebInfo/192j65fl/arm64-v8a/rngesturehandler_codegen_autolinked_build/CMakeFiles/react_codegen_rngesturehandler_codegen.dir/react/renderer/components/rngesturehandler_codegen/EventEmitters.cpp.o",
+			"path" : "/Users/marko/Code/lecrepe/lecrepe-app-v2/android/app/.cxx/Debug/4v1v3u39/x86/rngesturehandler_codegen_autolinked_build/CMakeFiles/react_codegen_rngesturehandler_codegen.dir/react/renderer/components/rngesturehandler_codegen/EventEmitters.cpp.o",
 			"sourceGroupIndex" : 1
 		},
 		{
 			"backtrace" : 4,
 			"isGenerated" : true,
-			"path" : "/Users/marko/Code/lecrepe/lecrepe-app-v2/android/app/.cxx/RelWithDebInfo/192j65fl/arm64-v8a/rngesturehandler_codegen_autolinked_build/CMakeFiles/react_codegen_rngesturehandler_codegen.dir/react/renderer/components/rngesturehandler_codegen/Props.cpp.o",
+			"path" : "/Users/marko/Code/lecrepe/lecrepe-app-v2/android/app/.cxx/Debug/4v1v3u39/x86/rngesturehandler_codegen_autolinked_build/CMakeFiles/react_codegen_rngesturehandler_codegen.dir/react/renderer/components/rngesturehandler_codegen/Props.cpp.o",
 			"sourceGroupIndex" : 1
 		},
 		{
 			"backtrace" : 4,
 			"isGenerated" : true,
-			"path" : "/Users/marko/Code/lecrepe/lecrepe-app-v2/android/app/.cxx/RelWithDebInfo/192j65fl/arm64-v8a/rngesturehandler_codegen_autolinked_build/CMakeFiles/react_codegen_rngesturehandler_codegen.dir/react/renderer/components/rngesturehandler_codegen/ShadowNodes.cpp.o",
+			"path" : "/Users/marko/Code/lecrepe/lecrepe-app-v2/android/app/.cxx/Debug/4v1v3u39/x86/rngesturehandler_codegen_autolinked_build/CMakeFiles/react_codegen_rngesturehandler_codegen.dir/react/renderer/components/rngesturehandler_codegen/ShadowNodes.cpp.o",
 			"sourceGroupIndex" : 1
 		},
 		{
 			"backtrace" : 4,
 			"isGenerated" : true,
-			"path" : "/Users/marko/Code/lecrepe/lecrepe-app-v2/android/app/.cxx/RelWithDebInfo/192j65fl/arm64-v8a/rngesturehandler_codegen_autolinked_build/CMakeFiles/react_codegen_rngesturehandler_codegen.dir/react/renderer/components/rngesturehandler_codegen/States.cpp.o",
+			"path" : "/Users/marko/Code/lecrepe/lecrepe-app-v2/android/app/.cxx/Debug/4v1v3u39/x86/rngesturehandler_codegen_autolinked_build/CMakeFiles/react_codegen_rngesturehandler_codegen.dir/react/renderer/components/rngesturehandler_codegen/States.cpp.o",
 			"sourceGroupIndex" : 1
 		},
 		{
 			"backtrace" : 4,
 			"isGenerated" : true,
-			"path" : "/Users/marko/Code/lecrepe/lecrepe-app-v2/android/app/.cxx/RelWithDebInfo/192j65fl/arm64-v8a/rngesturehandler_codegen_autolinked_build/CMakeFiles/react_codegen_rngesturehandler_codegen.dir/react/renderer/components/rngesturehandler_codegen/rngesturehandler_codegenJSI-generated.cpp.o",
+			"path" : "/Users/marko/Code/lecrepe/lecrepe-app-v2/android/app/.cxx/Debug/4v1v3u39/x86/rngesturehandler_codegen_autolinked_build/CMakeFiles/react_codegen_rngesturehandler_codegen.dir/react/renderer/components/rngesturehandler_codegen/rngesturehandler_codegenJSI-generated.cpp.o",
 			"sourceGroupIndex" : 1
 		},
 		{
 			"backtrace" : 4,
 			"isGenerated" : true,
-			"path" : "/Users/marko/Code/lecrepe/lecrepe-app-v2/android/app/.cxx/RelWithDebInfo/192j65fl/arm64-v8a/rngesturehandler_codegen_autolinked_build/CMakeFiles/react_codegen_rngesturehandler_codegen.dir/rngesturehandler_codegen-generated.cpp.o",
+			"path" : "/Users/marko/Code/lecrepe/lecrepe-app-v2/android/app/.cxx/Debug/4v1v3u39/x86/rngesturehandler_codegen_autolinked_build/CMakeFiles/react_codegen_rngesturehandler_codegen.dir/rngesturehandler_codegen-generated.cpp.o",
 			"sourceGroupIndex" : 1
 		},
 		{
 			"backtrace" : 4,
 			"isGenerated" : true,
-			"path" : "/Users/marko/Code/lecrepe/lecrepe-app-v2/android/app/.cxx/RelWithDebInfo/192j65fl/arm64-v8a/RNImagePickerSpec_autolinked_build/CMakeFiles/react_codegen_RNImagePickerSpec.dir/RNImagePickerSpec-generated.cpp.o",
+			"path" : "/Users/marko/Code/lecrepe/lecrepe-app-v2/android/app/.cxx/Debug/4v1v3u39/x86/RNImagePickerSpec_autolinked_build/CMakeFiles/react_codegen_RNImagePickerSpec.dir/RNImagePickerSpec-generated.cpp.o",
 			"sourceGroupIndex" : 1
 		},
 		{
 			"backtrace" : 4,
 			"isGenerated" : true,
-			"path" : "/Users/marko/Code/lecrepe/lecrepe-app-v2/android/app/.cxx/RelWithDebInfo/192j65fl/arm64-v8a/RNImagePickerSpec_autolinked_build/CMakeFiles/react_codegen_RNImagePickerSpec.dir/react/renderer/components/RNImagePickerSpec/ComponentDescriptors.cpp.o",
+			"path" : "/Users/marko/Code/lecrepe/lecrepe-app-v2/android/app/.cxx/Debug/4v1v3u39/x86/RNImagePickerSpec_autolinked_build/CMakeFiles/react_codegen_RNImagePickerSpec.dir/react/renderer/components/RNImagePickerSpec/ComponentDescriptors.cpp.o",
 			"sourceGroupIndex" : 1
 		},
 		{
 			"backtrace" : 4,
 			"isGenerated" : true,
-			"path" : "/Users/marko/Code/lecrepe/lecrepe-app-v2/android/app/.cxx/RelWithDebInfo/192j65fl/arm64-v8a/RNImagePickerSpec_autolinked_build/CMakeFiles/react_codegen_RNImagePickerSpec.dir/react/renderer/components/RNImagePickerSpec/EventEmitters.cpp.o",
+			"path" : "/Users/marko/Code/lecrepe/lecrepe-app-v2/android/app/.cxx/Debug/4v1v3u39/x86/RNImagePickerSpec_autolinked_build/CMakeFiles/react_codegen_RNImagePickerSpec.dir/react/renderer/components/RNImagePickerSpec/EventEmitters.cpp.o",
 			"sourceGroupIndex" : 1
 		},
 		{
 			"backtrace" : 4,
 			"isGenerated" : true,
-			"path" : "/Users/marko/Code/lecrepe/lecrepe-app-v2/android/app/.cxx/RelWithDebInfo/192j65fl/arm64-v8a/RNImagePickerSpec_autolinked_build/CMakeFiles/react_codegen_RNImagePickerSpec.dir/react/renderer/components/RNImagePickerSpec/Props.cpp.o",
+			"path" : "/Users/marko/Code/lecrepe/lecrepe-app-v2/android/app/.cxx/Debug/4v1v3u39/x86/RNImagePickerSpec_autolinked_build/CMakeFiles/react_codegen_RNImagePickerSpec.dir/react/renderer/components/RNImagePickerSpec/Props.cpp.o",
 			"sourceGroupIndex" : 1
 		},
 		{
 			"backtrace" : 4,
 			"isGenerated" : true,
-			"path" : "/Users/marko/Code/lecrepe/lecrepe-app-v2/android/app/.cxx/RelWithDebInfo/192j65fl/arm64-v8a/RNImagePickerSpec_autolinked_build/CMakeFiles/react_codegen_RNImagePickerSpec.dir/react/renderer/components/RNImagePickerSpec/RNImagePickerSpecJSI-generated.cpp.o",
+			"path" : "/Users/marko/Code/lecrepe/lecrepe-app-v2/android/app/.cxx/Debug/4v1v3u39/x86/RNImagePickerSpec_autolinked_build/CMakeFiles/react_codegen_RNImagePickerSpec.dir/react/renderer/components/RNImagePickerSpec/RNImagePickerSpecJSI-generated.cpp.o",
 			"sourceGroupIndex" : 1
 		},
 		{
 			"backtrace" : 4,
 			"isGenerated" : true,
-			"path" : "/Users/marko/Code/lecrepe/lecrepe-app-v2/android/app/.cxx/RelWithDebInfo/192j65fl/arm64-v8a/RNImagePickerSpec_autolinked_build/CMakeFiles/react_codegen_RNImagePickerSpec.dir/react/renderer/components/RNImagePickerSpec/ShadowNodes.cpp.o",
+			"path" : "/Users/marko/Code/lecrepe/lecrepe-app-v2/android/app/.cxx/Debug/4v1v3u39/x86/RNImagePickerSpec_autolinked_build/CMakeFiles/react_codegen_RNImagePickerSpec.dir/react/renderer/components/RNImagePickerSpec/ShadowNodes.cpp.o",
 			"sourceGroupIndex" : 1
 		},
 		{
 			"backtrace" : 4,
 			"isGenerated" : true,
-			"path" : "/Users/marko/Code/lecrepe/lecrepe-app-v2/android/app/.cxx/RelWithDebInfo/192j65fl/arm64-v8a/RNImagePickerSpec_autolinked_build/CMakeFiles/react_codegen_RNImagePickerSpec.dir/react/renderer/components/RNImagePickerSpec/States.cpp.o",
+			"path" : "/Users/marko/Code/lecrepe/lecrepe-app-v2/android/app/.cxx/Debug/4v1v3u39/x86/RNImagePickerSpec_autolinked_build/CMakeFiles/react_codegen_RNImagePickerSpec.dir/react/renderer/components/RNImagePickerSpec/States.cpp.o",
 			"sourceGroupIndex" : 1
 		}
 	],
