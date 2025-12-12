@@ -1,0 +1,1 @@
+/Users/maornelas/Code/lecrepe/lecrepe-app-v2/android/app/build/intermediates/cxx/RelWithDebInfo/2i5us3i5/obj/arm64-v8a

@@ -8,7 +8,6 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
-  Alert,
   Modal,
   Dimensions,
 } from 'react-native';
@@ -17,12 +16,16 @@ import { OrderLecrepeService } from '../services/orderLecrepeService';
 import { StorageService } from '../services/storageService';
 import { Store, Place, Order } from '../types';
 import { OrderCreation } from '../components';
+import { useToast } from '../hooks/useToast';
 
 interface MesasScreenProps {
   navigation?: any;
 }
 
 const MesasScreen: React.FC<MesasScreenProps> = ({ navigation }) => {
+  // Usar hook de toast para notificaciones elegantes
+  const { showSuccess, showError, showInfo, showWarning, ToastComponent } = useToast();
+  
   const [store, setStore] = useState<Store | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [selectedTable, setSelectedTable] = useState<Place | null>(null);
@@ -42,7 +45,7 @@ const MesasScreen: React.FC<MesasScreenProps> = ({ navigation }) => {
       setLoading(true);
       const idStore = await StorageService.getItem('idStore');
       if (!idStore) {
-        Alert.alert('Error', 'No se encontró el ID de la tienda');
+        showError('No se encontró el ID de la tienda');
         return;
       }
 
@@ -140,7 +143,7 @@ const MesasScreen: React.FC<MesasScreenProps> = ({ navigation }) => {
       setCroquisTablesState(newCroquisState);
     } catch (error: any) {
       console.error('Error loading data:', error);
-      Alert.alert('Error', 'No se pudieron cargar los datos');
+      showError('No se pudieron cargar los datos');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -178,10 +181,10 @@ const MesasScreen: React.FC<MesasScreenProps> = ({ navigation }) => {
       // loadData() actualizará automáticamente croquisTablesState
       await loadData();
       handleCloseOrderCreation();
-      Alert.alert('Éxito', `Orden creada para Mesa ${selectedTable?.name || ''}`);
+      showSuccess(`Orden creada para Mesa ${selectedTable?.name || ''}`);
     } catch (error: any) {
       console.error('Error handling order creation:', error);
-      Alert.alert('Error', 'No se pudo crear la orden');
+      showError('No se pudo crear la orden');
     }
   };
 
@@ -200,7 +203,7 @@ const MesasScreen: React.FC<MesasScreenProps> = ({ navigation }) => {
         // Si solo tenemos _id, intentar usarlo (puede que el backend lo acepte)
         orderId = selectedTable.order._id;
       } else {
-        Alert.alert('Error', 'No se pudo identificar la orden');
+        showError('No se pudo identificar la orden');
         return;
       }
       
@@ -211,10 +214,10 @@ const MesasScreen: React.FC<MesasScreenProps> = ({ navigation }) => {
       // loadData() actualizará automáticamente croquisTablesState
       await loadData();
       handleCloseOrderCreation();
-      Alert.alert('Éxito', `Orden actualizada para Mesa ${selectedTable?.name || ''}`);
+      showSuccess(`Orden actualizada para Mesa ${selectedTable?.name || ''}`);
     } catch (error: any) {
       console.error('Error handling order update:', error);
-      Alert.alert('Error', 'No se pudo actualizar la orden');
+      showError('No se pudo actualizar la orden');
     }
   };
 
@@ -374,11 +377,11 @@ const MesasScreen: React.FC<MesasScreenProps> = ({ navigation }) => {
   const screenHeight = Dimensions.get('window').height;
   const leftColumnWidth = screenWidth * 0.25; // 25% para columna izquierda
   const rightAreaWidth = screenWidth * 0.75; // 75% para área derecha
-  const tableSpacing = 12;
+  const tableSpacing = 32; // Aumentado para más separación vertical
   // Calcular altura disponible (pantalla completa menos header y SafeArea)
   const headerHeight = 60; // Altura aproximada del header
   const safeAreaTop = 44; // SafeArea top en iOS
-  const padding = 16; // Padding del contenedor
+  const padding = 24; // Padding del contenedor aumentado
   const availableHeight = screenHeight - headerHeight - safeAreaTop - padding;
   // Distribuir verticalmente: 4 filas de mesas
   const rowHeight = (availableHeight - (tableSpacing * 3)) / 4;
@@ -396,7 +399,7 @@ const MesasScreen: React.FC<MesasScreenProps> = ({ navigation }) => {
         <Text style={styles.title}>MESAS</Text>
         <TouchableOpacity
           style={styles.newOrderButton}
-          onPress={() => Alert.alert('Nueva Orden', 'Por implementar')}
+          onPress={() => showInfo('Nueva Orden - Por implementar')}
         >
           <Text style={styles.newOrderButtonText}>+ Nueva</Text>
         </TouchableOpacity>
@@ -410,53 +413,53 @@ const MesasScreen: React.FC<MesasScreenProps> = ({ navigation }) => {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        {/* Columna Izquierda - T1, T2, T3, T4 */}
+        {/* Columna Izquierda - T4, T3, T2, T1 (orden inverso) */}
         <View style={[styles.leftColumn, { width: leftColumnWidth, height: availableHeight }]}>
-          {renderTable('T1', { 
+          {renderTable('T4', { 
             position: 'absolute', 
             top: 0, 
             left: 0, 
-            width: leftColumnWidth - 8, 
-            height: rowHeight 
-          })}
-          {renderTable('T2', { 
-            position: 'absolute', 
-            top: rowHeight + tableSpacing, 
-            left: 0, 
-            width: leftColumnWidth - 8, 
+            width: leftColumnWidth - 24, 
             height: rowHeight 
           })}
           {renderTable('T3', { 
             position: 'absolute', 
-            top: (rowHeight + tableSpacing) * 2, 
+            top: rowHeight + tableSpacing, 
             left: 0, 
-            width: leftColumnWidth - 8, 
+            width: leftColumnWidth - 24, 
             height: rowHeight 
           })}
-          {renderTable('T4', { 
+          {renderTable('T2', { 
+            position: 'absolute', 
+            top: (rowHeight + tableSpacing) * 2, 
+            left: 0, 
+            width: leftColumnWidth - 24, 
+            height: rowHeight 
+          })}
+          {renderTable('T1', { 
             position: 'absolute', 
             top: (rowHeight + tableSpacing) * 3, 
             left: 0, 
-            width: leftColumnWidth - 8, 
+            width: leftColumnWidth - 24, 
             height: rowHeight 
           })}
         </View>
 
         {/* Área Derecha Principal */}
-        <View style={[styles.mainRightArea, { width: rightAreaWidth, height: availableHeight, marginLeft: 8 }]}>
+        <View style={[styles.mainRightArea, { width: rightAreaWidth, height: availableHeight, marginLeft: 24 }]}>
           {/* Fila 1 */}
           {renderTable('ARBOL', { 
             position: 'absolute', 
             top: 0, 
             left: 0, 
-            width: (rightAreaWidth - 16) * 0.48, 
+            width: (rightAreaWidth - 80) * 0.48, 
             height: rowHeight 
           })}
           {renderTable('BICI', { 
             position: 'absolute', 
             top: 0, 
-            right: 0, 
-            width: (rightAreaWidth - 16) * 0.48, 
+            left: (rightAreaWidth - 80) * 0.48 + 16, 
+            width: (rightAreaWidth - 80) * 0.48, 
             height: rowHeight 
           })}
 
@@ -465,14 +468,14 @@ const MesasScreen: React.FC<MesasScreenProps> = ({ navigation }) => {
             position: 'absolute', 
             top: rowHeight + tableSpacing, 
             left: 0, 
-            width: (rightAreaWidth - 16) * 0.48, 
+            width: (rightAreaWidth - 80) * 0.48, 
             height: rowHeight 
           })}
           {renderTable('CENTRO', { 
             position: 'absolute', 
             top: rowHeight + tableSpacing, 
-            right: 0, 
-            width: (rightAreaWidth - 16) * 0.48, 
+            left: (rightAreaWidth - 80) * 0.48 + 16, 
+            width: (rightAreaWidth - 80) * 0.48, 
             height: rowHeight 
           })}
 
@@ -481,14 +484,14 @@ const MesasScreen: React.FC<MesasScreenProps> = ({ navigation }) => {
             position: 'absolute', 
             top: (rowHeight + tableSpacing) * 2, 
             left: 0, 
-            width: (rightAreaWidth - 16) * 0.48, 
+            width: (rightAreaWidth - 80) * 0.48, 
             height: rowHeight 
           })}
           {renderTable('ESCALERA', { 
             position: 'absolute', 
             top: (rowHeight + tableSpacing) * 2, 
-            right: 0, 
-            width: (rightAreaWidth - 16) * 0.48, 
+            left: (rightAreaWidth - 80) * 0.48 + 16, 
+            width: (rightAreaWidth - 80) * 0.48, 
             height: rowHeight 
           })}
 
@@ -496,8 +499,8 @@ const MesasScreen: React.FC<MesasScreenProps> = ({ navigation }) => {
           {renderTable('TES', { 
             position: 'absolute', 
             top: (rowHeight + tableSpacing) * 3, 
-            left: (rightAreaWidth - 16) * 0.26, 
-            width: (rightAreaWidth - 16) * 0.48, 
+            left: (rightAreaWidth - 80) * 0.26, 
+            width: (rightAreaWidth - 80) * 0.48, 
             height: rowHeight 
           })}
         </View>
@@ -509,11 +512,10 @@ const MesasScreen: React.FC<MesasScreenProps> = ({ navigation }) => {
           isOpen={isOrderCreationOpen}
           onClose={handleCloseOrderCreation}
           tableInfo={{
-            mesa: (selectedTable.id_place && selectedTable.id_place > 0) 
-              ? selectedTable.id_place.toString() 
-              : selectedTable.name || '0',
-            nombre: selectedTable.order?.client?.name || selectedTable.order?.name || 'Cliente General',
+            mesa: selectedTable.name || 'NUEVA ORDEN', // Usar siempre el nombre de la mesa para el nombre de la orden
+            nombre: selectedTable.order?.client?.name || selectedTable.order?.name || selectedTable.name || 'Cliente General',
             orden: selectedTable.order?.id_order || 0,
+            id_place: selectedTable.id_place || 0, // ID numérico de la mesa para guardar en id_place
           }}
           isTakeout={false}
           editingOrder={isViewingOrder ? selectedTable.order : null}
@@ -522,6 +524,7 @@ const MesasScreen: React.FC<MesasScreenProps> = ({ navigation }) => {
           readOnly={selectedTable.order?.status === 'Cerrada' || selectedTable.order?.status === 'Cancelada' || selectedTable.order?.status === 'Entregada'}
         />
       )}
+      <ToastComponent />
     </SafeAreaView>
   );
 };
@@ -579,7 +582,7 @@ const styles = StyleSheet.create({
   },
   croquisContainer: {
     flexDirection: 'row',
-    padding: 8,
+    padding: 24,
     flexGrow: 1,
     minHeight: '100%',
   },
@@ -594,7 +597,8 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 2,
     borderColor: '#333',
-    padding: 8,
+    padding: 12,
+    margin: 8,
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',

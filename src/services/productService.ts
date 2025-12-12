@@ -204,6 +204,64 @@ export class ProductService {
       throw error;
     }
   }
+
+  /**
+   * Get all crepe ingredients
+   */
+  static async getCrepeIngredients(): Promise<ApiResponse<Array<{ name: string; category: string; available: boolean }>>> {
+    try {
+      const response = await fetch(API_ENDPOINTS.GET_CREPE_INGREDIENTS, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Error ${response.status}: ${errorText}`);
+      }
+
+      const data = await response.json();
+      return {
+        data: Array.isArray(data) ? data : [],
+        success: true,
+      };
+    } catch (error: any) {
+      console.error('Error fetching crepe ingredients:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get all crepe fruits
+   */
+  static async getCrepeFruits(): Promise<ApiResponse<Array<{ name: string; category: string; available: boolean }>>> {
+    try {
+      const response = await fetch(API_ENDPOINTS.GET_CREPE_FRUITS, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Error ${response.status}: ${errorText}`);
+      }
+
+      const data = await response.json();
+      return {
+        data: Array.isArray(data) ? data : [],
+        success: true,
+      };
+    } catch (error: any) {
+      console.error('Error fetching crepe fruits:', error);
+      throw error;
+    }
+  }
 }
 
 

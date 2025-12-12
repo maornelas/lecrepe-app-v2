@@ -182,6 +182,7 @@ const UsersScreen: React.FC<UsersScreenProps> = ({ navigation }) => {
         visible={openDetail}
         transparent={true}
         animationType="slide"
+        presentationStyle="overFullScreen"
         onRequestClose={handleCloseModal}
       >
         <View style={styles.modalOverlay}>

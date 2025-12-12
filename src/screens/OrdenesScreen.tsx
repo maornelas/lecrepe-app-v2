@@ -15,6 +15,7 @@ import { OrderLecrepeService } from '../services/orderLecrepeService';
 import { StorageService } from '../services/storageService';
 import { Order } from '../types';
 import { OrderCreation } from '../components';
+import { useToast } from '../hooks/useToast';
 
 interface OrdenesScreenProps {
   navigation?: any;
@@ -29,6 +30,7 @@ const OrdenesScreen: React.FC<OrdenesScreenProps> = ({ navigation }) => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const { showSuccess, showError, showInfo, showWarning, ToastComponent } = useToast();
 
   useEffect(() => {
     loadOrders();
@@ -39,7 +41,7 @@ const OrdenesScreen: React.FC<OrdenesScreenProps> = ({ navigation }) => {
       setLoading(true);
       const idStore = await StorageService.getItem('idStore');
       if (!idStore) {
-        Alert.alert('Error', 'No se encontró el ID de la tienda');
+        showError('No se encontró el ID de la tienda');
         return;
       }
 
@@ -51,7 +53,7 @@ const OrdenesScreen: React.FC<OrdenesScreenProps> = ({ navigation }) => {
       }
     } catch (error: any) {
       console.error('Error loading orders:', error);
-      Alert.alert('Error', 'No se pudieron cargar las órdenes');
+      showError('No se pudieron cargar las órdenes');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -99,20 +101,20 @@ const OrdenesScreen: React.FC<OrdenesScreenProps> = ({ navigation }) => {
   const handleMarkAsReady = async (orderId: number) => {
     try {
       await OrderLecrepeService.markOrderAsReady(orderId);
-      Alert.alert('Éxito', 'Orden marcada como lista');
+      showSuccess('Orden marcada como lista');
       loadOrders();
     } catch (error: any) {
-      Alert.alert('Error', 'No se pudo marcar la orden como lista');
+      showError('No se pudo marcar la orden como lista');
     }
   };
 
   const handleMarkAsDelivered = async (orderId: number) => {
     try {
       await OrderLecrepeService.markOrderAsDelivered(orderId);
-      Alert.alert('Éxito', 'Orden cerrada');
+      showSuccess('Orden cerrada');
       loadOrders();
     } catch (error: any) {
-      Alert.alert('Error', 'No se pudo cerrar la orden');
+      showError('No se pudo cerrar la orden');
     }
   };
 
@@ -120,11 +122,11 @@ const OrdenesScreen: React.FC<OrdenesScreenProps> = ({ navigation }) => {
     try {
       await OrderLecrepeService.cancelOrderLecrepe(orderId);
       setDeleteDialogOpen(false);
-      Alert.alert('Éxito', 'Orden cancelada');
+      showSuccess('Orden cancelada');
       loadOrders();
       setActiveTab(3); // Switch to canceled tab
     } catch (error: any) {
-      Alert.alert('Error', 'No se pudo cancelar la orden');
+      showError('No se pudo cancelar la orden');
     }
   };
 
@@ -151,11 +153,11 @@ const OrdenesScreen: React.FC<OrdenesScreenProps> = ({ navigation }) => {
     if (!selectedOrder) return;
     try {
       await OrderLecrepeService.updateOrderLecrepe(selectedOrder.id_order, updatedOrderData);
-      Alert.alert('Éxito', 'Orden actualizada exitosamente');
+      showSuccess('Orden actualizada exitosamente');
       loadOrders();
       handleCloseOrderDetail();
     } catch (error: any) {
-      Alert.alert('Error', 'No se pudo actualizar la orden');
+      showError('No se pudo actualizar la orden');
     }
   };
 
@@ -221,19 +223,24 @@ const OrdenesScreen: React.FC<OrdenesScreenProps> = ({ navigation }) => {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <>
+        <ToastComponent />
+        <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#ff9800" />
           <Text style={styles.loadingText}>Cargando órdenes...</Text>
         </View>
       </SafeAreaView>
+      </>
     );
   }
 
   const currentOrders = getCurrentOrders();
 
   return (
-    <SafeAreaView style={styles.container}>
+    <>
+      <ToastComponent />
+      <SafeAreaView style={styles.container}>
       {/* Header Navigation */}
       <View style={styles.header}>
         {/* Left side - Navigation buttons */}
@@ -452,6 +459,7 @@ const OrdenesScreen: React.FC<OrdenesScreenProps> = ({ navigation }) => {
         visible={deleteDialogOpen}
         transparent={true}
         animationType="fade"
+        presentationStyle="overFullScreen"
         onRequestClose={() => setDeleteDialogOpen(false)}
       >
         <View style={styles.modalOverlay}>
@@ -518,6 +526,7 @@ const OrdenesScreen: React.FC<OrdenesScreenProps> = ({ navigation }) => {
         }
       />
     </SafeAreaView>
+    </>
   );
 };
 

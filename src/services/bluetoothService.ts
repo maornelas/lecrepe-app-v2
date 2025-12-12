@@ -1,18 +1,17 @@
+import { StorageService } from './storageService';
+import { Platform, PermissionsAndroid } from 'react-native';
+import type { BluetoothDevice, BluetoothEventSubscription } from 'react-native-bluetooth-classic';
+
 // Lazy import para evitar errores de inicialización
 let RNBluetoothClassic: any = null;
-let BluetoothDevice: any = null;
-let BluetoothEventSubscription: any = null;
 
 try {
   const bluetoothModule = require('react-native-bluetooth-classic');
   RNBluetoothClassic = bluetoothModule.default || bluetoothModule;
-  BluetoothDevice = bluetoothModule.BluetoothDevice;
-  BluetoothEventSubscription = bluetoothModule.BluetoothEventSubscription;
+  // BluetoothDevice y BluetoothEventSubscription son solo tipos, no valores exportados
 } catch (error) {
   console.warn('Bluetooth module not available:', error);
 }
-import { StorageService } from './storageService';
-import { Platform, PermissionsAndroid } from 'react-native';
 
 /**
  * Bluetooth Service - Handles Bluetooth printer connections and printing

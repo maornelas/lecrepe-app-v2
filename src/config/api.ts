@@ -36,6 +36,8 @@ export const API_ENDPOINTS = {
   DELETE_PRODUCT: (id: string | number) => `${API_BASE_URL}/product/delete/${id}`,
   CREATE_CATEGORY: `${API_BASE_URL}/product/create-category`,
   CREATE_SUBCATEGORY: `${API_BASE_URL}/product/create-subcategory`,
+  GET_CREPE_INGREDIENTS: `${API_BASE_URL}/product/crepe-ingredients`,
+  GET_CREPE_FRUITS: `${API_BASE_URL}/product/crepe-fruits`,
   
   // Member endpoints
   GET_ALL_MEMBERS: (id_store: string | number) => `${API_BASE_URL}/member/get/store/${id_store}`,

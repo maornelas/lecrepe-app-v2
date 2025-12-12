@@ -18,6 +18,7 @@ import { OrderLecrepeService } from '../services/orderLecrepeService';
 import { StorageService } from '../services/storageService';
 import { useBluetooth } from '../contexts/BluetoothContext';
 import { Order } from '../types';
+import { useToast } from '../hooks/useToast';
 
 // Declaración de tipos para TextEncoder (disponible en React Native)
 declare const TextEncoder: {
@@ -35,6 +36,7 @@ interface OrderCreationProps {
     mesa: string | number;
     nombre: string;
     orden: number;
+    id_place?: number; // ID numérico de la mesa para guardar en id_place
   };
   isTakeout?: boolean;
   editingOrder?: Order | null;
@@ -53,9 +55,16 @@ interface OrderItem {
   selectedIngredients?: string[];
   excludedIngredients?: string[];
   selectedFruits?: string[];
+  additionalIngredients?: Array<{ name: string; category: string; available: boolean }>;
   takeoutFee?: number;
   fee_togo?: number;
+  itemTakeout?: boolean; // Marcar item individual como "para llevar" en órdenes de mesa
   originalProduct?: Product;
+  withPearls?: boolean;
+  deslactosado?: boolean;
+  sinAzucar?: boolean;
+  sinCremaBatida?: boolean;
+  comments?: string;
 }
 
 const OrderCreation: React.FC<OrderCreationProps> = ({
@@ -70,6 +79,8 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
 }) => {
   // Usar contexto de Bluetooth (persistente entre pantallas)
   const { isBluetoothEnabled, bluetoothDevice, sendToBluetooth } = useBluetooth();
+  // Usar hook de toast para notificaciones elegantes
+  const { showSuccess, showError, showInfo, showWarning, ToastComponent } = useToast();
 
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -85,6 +96,9 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
   }>({ open: false, drink: null });
   const [selectedPriceOption, setSelectedPriceOption] = useState('');
   const [withPearls, setWithPearls] = useState(false);
+  const [deslactosado, setDeslactosado] = useState(false);
+  const [sinAzucar, setSinAzucar] = useState(false);
+  const [sinCremaBatida, setSinCremaBatida] = useState(false);
   
   // Modal de ingredientes
   const [ingredientsModal, setIngredientsModal] = useState<{
@@ -134,8 +148,13 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
       if (subCategories.length > 0 && (!selectedSubCategory || !subCategories.includes(selectedSubCategory))) {
         setSelectedSubCategory(subCategories[0]);
       }
+      
+      // Si estamos en modo de edición y los productos están cargados, inicializar
+      if (isEditMode && editingOrder && orderItems.length === 0) {
+        initializeEditMode();
     }
-  }, [crepasData, bebidasData, activeTab]);
+    }
+  }, [crepasData, bebidasData, activeTab, isEditMode, editingOrder]);
 
   const mapProductsToComponentData = (productsList: Product[]) => {
     const crepasDataMap: Record<string, any[]> = {};
@@ -261,39 +280,245 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
           setSelectedSubCategory(crepasCategories[0]);
         }
         
-        // Si estamos en modo de edición, inicializar después de cargar productos
+        // Si estamos en modo de edición, inicializar con los datos recién cargados
         if (isEditMode && editingOrder) {
-          initializeEditMode();
+          initializeEditMode(crepasDataMap, bebidasDataMap);
         }
       }
     } catch (error: any) {
       console.error('Error loading products:', error);
-      Alert.alert('Error', 'No se pudieron cargar los productos');
+      showError('No se pudieron cargar los productos');
     } finally {
       setLoading(false);
     }
   };
 
-  const initializeEditMode = () => {
+  const initializeEditMode = (crepasDataToUse?: Record<string, any[]>, bebidasDataToUse?: Record<string, any[]>) => {
     if (editingOrder) {
       setOrderName(editingOrder.name || '');
+      // Usar los datos pasados como parámetros o los del estado
+      const crepasDataFinal = crepasDataToUse || crepasData;
+      const bebidasDataFinal = bebidasDataToUse || bebidasData;
+      
       const items: OrderItem[] = (editingOrder.items || editingOrder.products || []).map(
         (item, index) => {
           // El type_price del backend ya incluye el fee_togo si es para llevar
-          // No necesitamos sumar takeoutFee porque ya está incluido en type_price
-          const itemPrice = item.type_price || 0;
+          let itemPrice = item.type_price || 0;
+          const itemType = item.type || 'crepa';
+          const itemName = item.product_name || item.name || '';
+          
+          // Calcular fee_togo basándose en el producto original
+          let calculatedFeeTogo = 0;
+          
+          // Buscar el producto en los datos cargados para obtener el fee_togo
+          const allProducts = (itemType === 'crepa' || itemType === 'crepas')
+            ? Object.values(crepasDataFinal).flat()
+            : Object.values(bebidasDataFinal).flat();
+          
+          const foundProduct = allProducts.find((p: any) => {
+            const productName = p.name || '';
+            const normalizedItemName = itemName.toLowerCase().trim();
+            const normalizedProductName = productName.toLowerCase().trim();
+            return normalizedItemName === normalizedProductName ||
+                   normalizedItemName.includes(normalizedProductName) ||
+                   normalizedProductName.includes(normalizedItemName);
+          });
+          
+          if (foundProduct && isTakeout && (itemType === 'crepa' || itemType === 'crepas') && foundProduct.fee_togo) {
+            calculatedFeeTogo = foundProduct.fee_togo;
+          }
+          
+          // Si type_price es 0 o no está definido, buscar el precio del producto original
+          if (itemPrice === 0) {
+            const itemSize = item.size || '';
+            
+            if (foundProduct) {
+              // Si hay un tamaño específico, buscar el precio de ese tamaño
+              if (itemSize && foundProduct.priceOptions && foundProduct.priceOptions.length > 0) {
+                const sizePrice = foundProduct.priceOptions.find((p: any) => {
+                  const size = p.name || '';
+                  return size.toLowerCase() === itemSize.toLowerCase() ||
+                         (itemSize.toLowerCase().includes('llevar') && size.toLowerCase().includes('llevar'));
+                });
+                if (sizePrice) {
+                  itemPrice = sizePrice.price || foundProduct.basePrice || foundProduct.price || 0;
+                } else {
+                  itemPrice = foundProduct.basePrice || foundProduct.price || 0;
+                }
+              } else {
+                // Usar el precio base del producto
+                itemPrice = foundProduct.basePrice || foundProduct.price || 0;
+              }
+              
+              // Si el precio no incluye el fee_togo y es para llevar, agregarlo
+              if (calculatedFeeTogo > 0 && (item.type_price || 0) === 0) {
+                itemPrice += calculatedFeeTogo;
+              }
+              
+              // Identificar ingredientes adicionales (toppings marcados con additional: true o selected: true)
+              // NO cargar ingredientes esenciales seleccionados (ya no se guardan como toppings)
+              const productIngredients = foundProduct.ingredients && Array.isArray(foundProduct.ingredients)
+                ? foundProduct.ingredients.map((ing: any) => typeof ing === 'string' ? ing : ing.name)
+                : [];
+              
+              // Obtener ingredientes adicionales (marcados con additional: true o selected: true sin marca)
+              const additionalToppings = item.toppings?.filter((t: any) => {
+                // Si tiene marca additional: true, es adicional
+                if (t.additional === true) return true;
+                // Si tiene selected: true, verificar si es adicional (no está en ingredientes del producto)
+                if (t.selected === true && t.selected !== false) {
+                  const toppingName = t.name || '';
+                  return !productIngredients.some((ing: string) => 
+                    ing.toLowerCase().trim() === toppingName.toLowerCase().trim()
+                  );
+                }
+                return false;
+              }) || [];
+              
+              const additionalIngredients = additionalToppings.map((t: any) => ({
+                name: t.name,
+                category: 'dulce',
+                available: true
+              }));
+              
+              // Obtener ingredientes esenciales excluidos (selected: false)
+              const excludedToppings = item.toppings?.filter((t: any) => t.selected === false) || [];
+              const excludedIngredients = excludedToppings.map((t: any) => t.name);
+              
+              // NO cargar selectedIngredients (ingredientes esenciales seleccionados) porque ya no se guardan
+              // Solo se necesitan para la lógica interna del modal de personalización
+              
+              // Cargar opciones adicionales de bebidas desde comments
+              const comments = (item as any).comments || '';
+              const commentsLower = comments.toLowerCase();
+              const wasDeslactosado = commentsLower.includes('deslactosado');
+              const wasSinAzucar = commentsLower.includes('sin azúcar') || commentsLower.includes('sin azucar');
+              const wasSinCremaBatida = commentsLower.includes('sin crema batida');
+              
+              // Verificar si el item es para llevar individualmente (en órdenes de mesa)
+              const wasItemTakeout = (item as any).item_togo === true || 
+                                     (commentsLower.includes('para llevar') && !isTakeout);
+              
           return {
             id: item._id || `item_${index}`,
             name: item.product_name || item.name || '',
             price: itemPrice, // Ya incluye fee_togo si aplica
-            quantity: (item.units && item.units > 0) ? item.units : 1, // Asegurar que siempre haya al menos 1 unidad
+                quantity: (item.units && item.units > 0) ? item.units : 1,
             category: item.type || 'crepa',
             option: item.size || 'Regular',
-            selectedIngredients: item.toppings?.filter((t: any) => t.selected !== false).map((t: any) => t.name) || [],
-            excludedIngredients: item.toppings?.filter((t: any) => t.selected === false).map((t: any) => t.name) || [],
-            takeoutFee: 0, // Ya está incluido en el precio
-            fee_togo: 0, // Ya está incluido en el precio
+            selectedIngredients: [], // No cargar ingredientes esenciales seleccionados (ya no se guardan)
+            excludedIngredients: excludedIngredients,
+                additionalIngredients: additionalIngredients,
+                takeoutFee: calculatedFeeTogo,
+                fee_togo: calculatedFeeTogo,
+                itemTakeout: wasItemTakeout, // Cargar estado de "para llevar" individual
+                originalProduct: foundProduct,
+                deslactosado: wasDeslactosado,
+                sinAzucar: wasSinAzucar,
+                sinCremaBatida: wasSinCremaBatida,
+                comments: comments,
+              };
+          } else {
+            // Si no se encuentra el producto, usar valores del item original
+            // Identificar ingredientes adicionales (marcados con additional: true o selected: true)
+            const additionalToppings = item.toppings?.filter((t: any) => {
+              // Si tiene marca additional: true, es adicional
+              if (t.additional === true) return true;
+              // Si tiene selected: true, es adicional (porque los esenciales seleccionados ya no se guardan)
+              if (t.selected === true && t.selected !== false) return true;
+              return false;
+            }) || [];
+            const additionalIngredients = additionalToppings.map((t: any) => ({
+              name: t.name,
+              category: 'dulce',
+              available: true
+            }));
+            
+            // Obtener ingredientes esenciales excluidos (selected: false)
+            const excludedToppings = item.toppings?.filter((t: any) => t.selected === false) || [];
+            const excludedIngredients = excludedToppings.map((t: any) => t.name);
+            
+            // Cargar opciones adicionales de bebidas desde comments
+            const comments = (item as any).comments || '';
+            const commentsLower = comments.toLowerCase();
+            const wasDeslactosado = commentsLower.includes('deslactosado');
+            const wasSinAzucar = commentsLower.includes('sin azúcar') || commentsLower.includes('sin azucar');
+            const wasSinCremaBatida = commentsLower.includes('sin crema batida');
+            
+            // Verificar si el item es para llevar individualmente (en órdenes de mesa)
+            const wasItemTakeout = (item as any).item_togo === true || 
+                                   (commentsLower.includes('para llevar') && !isTakeout);
+            
+            return {
+              id: item._id || `item_${index}`,
+              name: item.product_name || item.name || '',
+              price: itemPrice,
+              quantity: (item.units && item.units > 0) ? item.units : 1,
+              category: itemType,
+              option: item.size || 'Regular',
+              selectedIngredients: [], // No cargar ingredientes esenciales seleccionados (ya no se guardan)
+              excludedIngredients: excludedIngredients,
+              additionalIngredients: additionalIngredients,
+              takeoutFee: calculatedFeeTogo,
+              fee_togo: calculatedFeeTogo,
+              itemTakeout: wasItemTakeout, // Cargar estado de "para llevar" individual
+              deslactosado: wasDeslactosado,
+              sinAzucar: wasSinAzucar,
+              sinCremaBatida: wasSinCremaBatida,
+              comments: comments,
+            };
+          }
+        } else {
+          // Si type_price existe, el precio ya incluye el fee_togo
+          // Pero necesitamos mostrar el fee_togo por separado
+          // Identificar ingredientes adicionales (marcados con additional: true o selected: true)
+          const additionalToppings = item.toppings?.filter((t: any) => {
+            // Si tiene marca additional: true, es adicional
+            if (t.additional === true) return true;
+            // Si tiene selected: true, es adicional (porque los esenciales seleccionados ya no se guardan)
+            if (t.selected === true && t.selected !== false) return true;
+            return false;
+          }) || [];
+          const additionalIngredients = additionalToppings.map((t: any) => ({
+            name: t.name,
+            category: 'dulce',
+            available: true
+          }));
+          
+          // Obtener ingredientes esenciales excluidos (selected: false)
+          const excludedToppings = item.toppings?.filter((t: any) => t.selected === false) || [];
+          const excludedIngredients = excludedToppings.map((t: any) => t.name);
+          
+          // Cargar opciones adicionales de bebidas desde comments
+          const comments = (item as any).comments || '';
+          const commentsLower = comments.toLowerCase();
+          const wasDeslactosado = commentsLower.includes('deslactosado');
+          const wasSinAzucar = commentsLower.includes('sin azúcar') || commentsLower.includes('sin azucar');
+          const wasSinCremaBatida = commentsLower.includes('sin crema batida');
+          
+          // Verificar si el item es para llevar individualmente (en órdenes de mesa)
+          const wasItemTakeout = (item as any).item_togo === true || 
+                                 (commentsLower.includes('para llevar') && !isTakeout);
+          
+          return {
+            id: item._id || `item_${index}`,
+            name: item.product_name || item.name || '',
+            price: itemPrice,
+            quantity: (item.units && item.units > 0) ? item.units : 1,
+            category: itemType,
+            option: item.size || 'Regular',
+            selectedIngredients: [], // No cargar ingredientes esenciales seleccionados (ya no se guardan)
+            excludedIngredients: excludedIngredients,
+            additionalIngredients: additionalIngredients,
+            takeoutFee: calculatedFeeTogo,
+            fee_togo: calculatedFeeTogo,
+            itemTakeout: wasItemTakeout, // Cargar estado de "para llevar" individual
+            deslactosado: wasDeslactosado,
+            sinAzucar: wasSinAzucar,
+            sinCremaBatida: wasSinCremaBatida,
+            comments: comments,
           };
+        }
         }
       );
       setOrderItems(items);
@@ -411,6 +636,11 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
     }
   };
 
+  const isFrappe = (product: any) => {
+    const name = (product.name || '').toLowerCase();
+    return name.includes('frappé') || name.includes('frappe') || name.includes('smoothie');
+  };
+
   const handleDrinkOptionsConfirm = () => {
     if (!drinkOptionsModal.drink || !selectedPriceOption) return;
 
@@ -424,23 +654,43 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
       finalPrice += drink.pricePerlas;
     }
 
-    const itemName = withPearls
-      ? `${drink.name} - ${selectedPriceOption} con Perlas`
-      : `${drink.name} - ${selectedPriceOption}`;
+    // Construir array de opciones adicionales para frappés
+    const frappeOptions: string[] = [];
+    if (isFrappe(drink)) {
+      if (deslactosado) frappeOptions.push('Deslactosado');
+      if (sinAzucar) frappeOptions.push('Sin Azúcar');
+      if (sinCremaBatida) frappeOptions.push('Sin crema batida');
+    }
+
+    // Construir comentarios con las opciones seleccionadas
+    const comments = frappeOptions.length > 0 ? frappeOptions.join(', ') : '';
+
+    let itemName = `${drink.name} - ${selectedPriceOption}`;
+    if (withPearls) {
+      itemName += ' con Perlas';
+    }
 
     const newItem: OrderItem = {
-      id: `${drink.id}_${selectedPriceOption.replace(/\s+/g, '_')}`,
+      id: `${drink.id}_${selectedPriceOption.replace(/\s+/g, '_')}${withPearls ? '_con_perlas' : ''}${deslactosado ? '_deslactosado' : ''}${sinAzucar ? '_sin_azucar' : ''}${sinCremaBatida ? '_sin_crema' : ''}`,
       name: itemName,
       price: finalPrice,
       quantity: 1,
       category: 'bebida',
       option: selectedPriceOption,
+      withPearls: withPearls,
+      deslactosado: deslactosado,
+      sinAzucar: sinAzucar,
+      sinCremaBatida: sinCremaBatida,
+      comments: comments,
     };
 
     setOrderItems((prev) => [...prev, newItem]);
     setDrinkOptionsModal({ open: false, drink: null });
     setSelectedPriceOption('');
     setWithPearls(false);
+    setDeslactosado(false);
+    setSinAzucar(false);
+    setSinCremaBatida(false);
   };
 
   const updateQuantity = (itemId: string, change: number) => {
@@ -470,16 +720,59 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
     return orderItems.reduce((total, item) => total + item.quantity, 0);
   };
 
+  // Función para toggle de "para llevar" en items individuales (solo para órdenes de mesa)
+  const toggleItemTakeout = (itemId: string) => {
+    if (readOnly) return;
+    
+    setOrderItems(prev =>
+      prev.map((item) => {
+        if (item.id === itemId) {
+          const newItemTakeout = !item.itemTakeout;
+          const originalProduct = item.originalProduct;
+          
+          // Si el item es una crepa, calcular el fee_togo
+          if (item.category === 'crepa' && originalProduct) {
+            const feeTogo = (originalProduct as any).fee_togo || 10; // Default $10
+            
+            // Calcular precio base (sin fee_togo)
+            // Si el item ya tiene takeoutFee, restarlo para obtener el precio base
+            const currentTakeoutFee = item.takeoutFee || item.fee_togo || 0;
+            const basePrice = item.price - currentTakeoutFee;
+            
+            // Calcular nuevo precio
+            const newPrice = newItemTakeout ? basePrice + feeTogo : basePrice;
+            
+            return {
+              ...item,
+              itemTakeout: newItemTakeout,
+              takeoutFee: newItemTakeout ? feeTogo : 0,
+              fee_togo: newItemTakeout ? feeTogo : 0,
+              price: newPrice,
+            };
+          }
+          
+          return {
+            ...item,
+            itemTakeout: newItemTakeout,
+            takeoutFee: 0,
+            fee_togo: 0,
+          };
+        }
+        return item;
+      })
+    );
+  };
+
   const handleOrderReady = async () => {
     if (orderItems.length === 0) {
-      Alert.alert('Error', 'Agrega al menos un producto a la orden');
+      showError('Agrega al menos un producto a la orden');
       return;
     }
 
     try {
       const idStore = await StorageService.getItem('idStore');
       if (!idStore) {
-        Alert.alert('Error', 'No se encontró el ID de la tienda');
+        showError('No se encontró el ID de la tienda');
         return;
       }
 
@@ -502,7 +795,9 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
       // Preparar datos de la orden similar a lecrepe-front
       const orderData: any = {
         id_store: parseInt(idStore),
-        id_place: tableInfo.mesa === 'PARA LLEVAR' || tableInfo.mesa === 'NUEVA ORDEN' ? 0 : parseInt(String(tableInfo.mesa)) || 0,
+        id_place: tableInfo.mesa === 'PARA LLEVAR' || tableInfo.mesa === 'NUEVA ORDEN' 
+          ? 0 
+          : (tableInfo.id_place || (typeof tableInfo.mesa === 'number' ? tableInfo.mesa : parseInt(String(tableInfo.mesa)) || 0)),
         togo: isTakeout,
         status: isEditMode && editingOrder ? editingOrder.status : 'Pendiente',
         client: {
@@ -516,21 +811,11 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
           url_ticket: (editingOrder?.payment as any)?.url_ticket || '',
         },
         items: orderItems.map((item) => {
-          // Combinar ingredientes seleccionados y excluidos en toppings
+          // Solo guardar ingredientes excluidos y adicionales en toppings
+          // NO guardar ingredientes esenciales seleccionados (son los que vienen por defecto)
           const toppings: any[] = [];
           
-          // Agregar ingredientes seleccionados
-          if (item.selectedIngredients && item.selectedIngredients.length > 0) {
-            item.selectedIngredients.forEach((ingredient) => {
-              toppings.push({
-                name: ingredient,
-                price: 0,
-                selected: true,
-              });
-            });
-          }
-          
-          // Agregar ingredientes excluidos
+          // Agregar ingredientes esenciales excluidos (selected: false)
           if (item.excludedIngredients && item.excludedIngredients.length > 0) {
             item.excludedIngredients.forEach((ingredient) => {
               toppings.push({
@@ -541,15 +826,52 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
             });
           }
           
+          // Agregar ingredientes adicionales (selected: true, additional: true)
+          if (item.additionalIngredients && item.additionalIngredients.length > 0) {
+            item.additionalIngredients.forEach((ingredient) => {
+              const ingredientName = typeof ingredient === 'string' ? ingredient : ingredient.name;
+              toppings.push({
+                name: ingredientName,
+                price: 0,
+                selected: true,
+                additional: true, // Marcar como ingrediente adicional para distinguirlo en KitchenScreen
+              });
+            });
+          }
+          
+          // Construir comentarios con opciones adicionales de bebidas
+          let comments = '';
+          if (item.category === 'bebida') {
+            const frappeOptions: string[] = [];
+            if (item.deslactosado) frappeOptions.push('Deslactosado');
+            if (item.sinAzucar) frappeOptions.push('Sin Azúcar');
+            if (item.sinCremaBatida) frappeOptions.push('Sin crema batida');
+            comments = frappeOptions.length > 0 ? frappeOptions.join(', ') : (item.comments || '');
+          }
+          
+          // Si el item está marcado como "para llevar" individualmente (en órdenes de mesa)
+          if (!isTakeout && item.itemTakeout && item.category === 'crepa') {
+            // Agregar indicador de "para llevar" en los comentarios si no hay otros comentarios
+            if (!comments) {
+              comments = 'Para llevar';
+            } else {
+              comments = `Para llevar, ${comments}`;
+            }
+          }
+          
           return {
             type: item.category || (activeTab === 0 ? 'crepa' : 'bebida'),
             name: item.name,
             size: item.option || 'Regular',
-            price: item.price + (item.takeoutFee || 0), // Incluir takeoutFee en el precio
+            price: item.price, // El precio ya incluye takeoutFee y cargo adicional si aplica
             units: item.quantity || 1, // Asegurar que siempre haya al menos 1 unidad
             toppings: toppings,
-            comments: '',
+            comments: comments,
             url: '',
+            // Agregar campo para indicar si el item individual es para llevar (en órdenes de mesa)
+            item_togo: (!isTakeout && item.itemTakeout) ? true : undefined,
+            // También incluir takeoutFee en el item para referencia
+            takeout_fee: (!isTakeout && item.itemTakeout && item.takeoutFee) ? item.takeoutFee : undefined,
           };
         }),
         attended_by: (editingOrder as any)?.attended_by || 'Sistema',
@@ -571,7 +893,7 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
           id_order: editingOrder.id_order || editingOrder._id || (editingOrder as any).id,
         };
         await onSave(orderDataWithId);
-        Alert.alert('Éxito', 'Orden actualizada exitosamente');
+        showSuccess('Orden actualizada exitosamente');
         resetOrder();
         onClose();
       } else {
@@ -587,7 +909,7 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
         
         if (response.success) {
           console.log('🔍 DEBUG OrderCreation - Order created successfully:', response.data);
-          Alert.alert('Éxito', 'Orden creada exitosamente');
+          showSuccess('Orden creada exitosamente');
           
           // Si onSave está definido (desde OrdenesScreen), llamarlo para actualizar el estado
           if (onSave) {
@@ -607,19 +929,19 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
           }, 1000);
         } else {
           console.error('🔍 DEBUG OrderCreation - Error creating order:', response);
-          Alert.alert('Error', 'No se pudo crear la orden');
+          showError('No se pudo crear la orden');
         }
       }
     } catch (error: any) {
       console.error('Error processing order:', error);
-      Alert.alert('Error', `No se pudo procesar la orden: ${error.message || 'Error desconocido'}`);
+      showError(`No se pudo procesar la orden: ${error.message || 'Error desconocido'}`);
     }
   };
 
 
   const handlePrintOrder = async () => {
     if (orderItems.length === 0) {
-      Alert.alert('Aviso', 'No hay items en la orden para imprimir');
+      showWarning('No hay items en la orden para imprimir');
       return;
     }
 
@@ -636,13 +958,13 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
 
       // Verificar configuración
       if (!useBluetooth && (!printerIP || !printerPort)) {
-        Alert.alert('Error', 'Por favor configura la impresora en Configuración');
+        showError('Por favor configura la impresora en Configuración');
         setIsPrinting(false);
         return;
       }
 
       if (useBluetooth && !bluetoothDevice) {
-        Alert.alert('Error', 'Por favor conecta un dispositivo Bluetooth en Configuración');
+        showError('Por favor conecta un dispositivo Bluetooth en Configuración');
         setIsPrinting(false);
         return;
       }
@@ -794,10 +1116,10 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
         try {
           await sendToBluetooth(ticketContent);
           setIsPrinting(false);
-          Alert.alert('Éxito', `Orden #${tableInfo?.orden || 0} enviada a impresora Bluetooth`);
+          showSuccess(`Orden #${tableInfo?.orden || 0} enviada a impresora Bluetooth`);
         } catch (error: any) {
           setIsPrinting(false);
-          Alert.alert('Error', 'Error al enviar a impresora Bluetooth: ' + (error.message || 'Error desconocido'));
+          showError('Error al enviar a impresora Bluetooth: ' + (error.message || 'Error desconocido'));
         }
       } else {
         const client = TcpSocket.createConnection(
@@ -814,12 +1136,12 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
               setTimeout(() => {
                 client.destroy();
                 setIsPrinting(false);
-                Alert.alert('Éxito', `Orden #${tableInfo?.orden || 0} enviada a impresora`);
+                showSuccess(`Orden #${tableInfo?.orden || 0} enviada a impresora`);
               }, 500);
             } catch (error: any) {
               client.destroy();
               setIsPrinting(false);
-              Alert.alert('Error', 'Error al enviar datos: ' + error.message);
+              showError('Error al enviar datos: ' + error.message);
             }
           }
         );
@@ -827,10 +1149,7 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
         client.on('error', (error: any) => {
           client.destroy();
           setIsPrinting(false);
-          Alert.alert(
-            'Error de conexión',
-            'No se pudo conectar a la impresora.\n\nVerifica:\n- IP correcta: ' + printerIP + '\n- Puerto: ' + printerPort + '\n- Que la tablet esté en la misma red WiFi'
-          );
+          showError('No se pudo conectar a la impresora. Verifica IP, puerto y conexión WiFi');
         });
 
         client.on('close', () => {
@@ -841,22 +1160,43 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
           if (client && !client.destroyed) {
             client.destroy();
             setIsPrinting(false);
-            Alert.alert('Timeout', 'La impresora no respondió. Verifica la conexión.');
+            showError('La impresora no respondió. Verifica la conexión.');
           }
         }, 10000);
       }
     } catch (error: any) {
       setIsPrinting(false);
-      Alert.alert('Error', 'Error al imprimir: ' + (error.message || 'Error desconocido'));
+      showError('Error al imprimir: ' + (error.message || 'Error desconocido'));
     }
   };
 
   // Función para manejar clic en items de crepa en el sidebar
-  const handleCrepeItemClick = (item: OrderItem) => {
+  const handleCrepeItemClick = async (item: OrderItem) => {
     if (readOnly) return;
     
     // Solo permitir para crepas
     if (item.category !== 'crepa') return;
+
+    // Cargar ingredientes y frutas si no están cargados
+    if (crepeIngredients.length === 0 || crepeFruits.length === 0) {
+      try {
+        const [ingredientsResponse, fruitsResponse] = await Promise.all([
+          ProductService.getCrepeIngredients(),
+          ProductService.getCrepeFruits()
+        ]);
+        
+        if (ingredientsResponse.success && ingredientsResponse.data) {
+          setCrepeIngredients(ingredientsResponse.data);
+        }
+        
+        if (fruitsResponse.success && fruitsResponse.data) {
+          setCrepeFruits(fruitsResponse.data);
+        }
+      } catch (error: any) {
+        console.error('Error loading ingredients:', error);
+        // Continuar aunque haya error, usar los que ya están cargados
+      }
+    }
 
     // Buscar el producto original
     let originalProduct: Product | null = null;
@@ -902,8 +1242,59 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
         fruitsToSelect = [];
       }
 
+      // Inicializar ingredientes adicionales del item
+      let additionalIngredientsToLoad: Array<{ name: string; category: string; available: boolean }> = [];
+      if (item.additionalIngredients && item.additionalIngredients.length > 0) {
+        // Convertir a formato correcto si es necesario
+        additionalIngredientsToLoad = item.additionalIngredients.map((ing: any) => {
+          if (typeof ing === 'string') {
+            // Si es string, buscar en crepeIngredients o crepeFruits para obtener la categoría
+            // Si los arrays aún no están cargados, intentar cargarlos primero
+            let foundIngredient = crepeIngredients.find(ci => ci.name === ing);
+            let foundFruit = crepeFruits.find(cf => cf.name === ing);
+            
+            // Si no se encuentra y los arrays están vacíos, intentar cargar desde API
+            if (!foundIngredient && !foundFruit && (crepeIngredients.length === 0 || crepeFruits.length === 0)) {
+              // Usar categoría por defecto basada en el nombre o intentar detectar
+              const lowerName = ing.toLowerCase();
+              if (lowerName.includes('fruta') || ['fresa', 'plátano', 'durazno', 'mango', 'kiwi', 'piña'].some(f => lowerName.includes(f))) {
+                return { name: ing, category: 'fruta', available: true };
+              } else {
+                return { name: ing, category: 'dulce', available: true };
+              }
+            }
+            
+            if (foundIngredient) {
+              return foundIngredient;
+            } else if (foundFruit) {
+              return foundFruit;
+            } else {
+              // Si no se encuentra después de buscar, usar categoría por defecto
+              const lowerName = ing.toLowerCase();
+              if (lowerName.includes('fruta') || ['fresa', 'plátano', 'durazno', 'mango', 'kiwi', 'piña'].some(f => lowerName.includes(f))) {
+                return { name: ing, category: 'fruta', available: true };
+              } else {
+                return { name: ing, category: 'dulce', available: true };
+              }
+            }
+          } else if (ing && typeof ing === 'object' && ing.name) {
+            // Si ya es un objeto, asegurarse de que tenga el formato correcto
+            return {
+              name: ing.name,
+              category: ing.category || 'dulce',
+              available: ing.available !== false
+            };
+          }
+          return null;
+        }).filter((ing): ing is { name: string; category: string; available: boolean } => ing !== null);
+      }
+
       setSelectedIngredients(ingredientsToSelect);
       setSelectedFruits(fruitsToSelect);
+      setAdditionalIngredients(additionalIngredientsToLoad);
+      
+      // Log para debug - verificar que se carguen todos los ingredientes adicionales
+      console.log('🔍 Cargando ingredientes adicionales al abrir modal:', additionalIngredientsToLoad.length, additionalIngredientsToLoad.map(ing => ing.name));
 
       setIngredientsModal({
         open: true,
@@ -911,7 +1302,7 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
         originalProduct: originalProduct,
       });
     } else {
-      Alert.alert('Error', 'No se pudo encontrar el producto original');
+      showError('No se pudo encontrar el producto original');
     }
   };
 
@@ -963,7 +1354,7 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
     // Validar que si el ingrediente "fruta" está seleccionado, debe haber al menos una fruta elegida
     if (hasFruitIngredient && selectedFruits.length === 0) {
       setShowFruitValidationError(true);
-      Alert.alert('Error', 'Debes seleccionar al menos una fruta');
+      showError('Debes seleccionar al menos una fruta');
       return;
     }
     setShowFruitValidationError(false);
@@ -983,12 +1374,30 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
       uniqueId = `${ingredientsModal.item.id}_custom_${customParts.join('_')}`;
     }
 
+    // Asegurarse de que todos los ingredientes adicionales se guarden en el formato correcto
+    const normalizedAdditionalIngredients = additionalIngredients.map((ing: any) => {
+      if (typeof ing === 'string') {
+        return { name: ing, category: 'dulce', available: true };
+      } else if (ing && typeof ing === 'object' && ing.name) {
+        return {
+          name: ing.name,
+          category: ing.category || 'dulce',
+          available: ing.available !== false
+        };
+      }
+      return null;
+    }).filter((ing): ing is { name: string; category: string; available: boolean } => ing !== null);
+
+    // Log para debug - verificar que se guarden todos los ingredientes adicionales
+    console.log('🔍 Guardando ingredientes adicionales:', normalizedAdditionalIngredients.length, normalizedAdditionalIngredients.map(ing => ing.name));
+
     const updatedItem: OrderItem = {
       ...ingredientsModal.item,
       id: uniqueId,
       selectedIngredients: selectedIngredients,
       excludedIngredients: excludedIngredients,
       selectedFruits: finalSelectedFruits,
+      additionalIngredients: normalizedAdditionalIngredients, // Guardar todos los ingredientes adicionales normalizados
     };
 
     // Verificar si el item actual ya tiene personalización
@@ -996,11 +1405,26 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
       ingredientsModal.item.selectedIngredients || 
       ingredientsModal.item.excludedIngredients;
 
+    // Calcular precio actualizado con ingredientes adicionales
+    // El precio del item ya incluye el fee_togo si viene de una orden existente
+    // Si hay 2 o más ingredientes adicionales, agregar $5 pesos
+    const extraPrice = normalizedAdditionalIngredients.length >= 2 
+      ? (ingredientsModal.originalProduct?.extraIngredientsPrice || 5)
+      : 0;
+    // Usar el precio del item directamente (ya incluye fee_togo si aplica)
+    const updatedPrice = (ingredientsModal.item.price || 0) + extraPrice;
+
+    const finalUpdatedItem: OrderItem = {
+      ...updatedItem,
+      price: updatedPrice,
+      additionalIngredients: normalizedAdditionalIngredients, // Guardar todos los ingredientes adicionales normalizados
+    };
+
     if (currentItemHasCustomization) {
       // Si ya tiene personalización, actualizar el item existente
       setOrderItems(prev =>
         prev.map(item =>
-          item.id === ingredientsModal.item!.id ? updatedItem : item
+          item.id === ingredientsModal.item!.id ? finalUpdatedItem : item
         )
       );
     } else {
@@ -1018,19 +1442,8 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
       );
 
       // Luego, agregar el nuevo item personalizado
-      setOrderItems(prev => [...prev, { ...updatedItem, quantity: 1 }]);
+      setOrderItems(prev => [...prev, { ...finalUpdatedItem, quantity: 1 }]);
     }
-
-    // Calcular precio actualizado con ingredientes adicionales
-    const extraPrice = additionalIngredients.length > 1 
-      ? (ingredientsModal.originalProduct?.extraIngredientsPrice || 0)
-      : 0;
-    const updatedPrice = (ingredientsModal.item.price || 0) + extraPrice;
-
-    const finalUpdatedItem: OrderItem = {
-      ...updatedItem,
-      price: updatedPrice,
-    };
 
     setIngredientsModal({ open: false, item: null, originalProduct: null });
     setSelectedIngredients([]);
@@ -1108,61 +1521,56 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
   const calculateTotalPrice = () => {
     if (!ingredientsModal.item) return 0;
     
-    // Obtener precio base del item o del originalProduct si no está disponible
-    let basePrice = ingredientsModal.item.price || 0;
-    if (basePrice === 0 && ingredientsModal.originalProduct) {
-      // Si el precio del item es 0, obtenerlo del producto original
-      basePrice = (ingredientsModal.originalProduct as any).price || 
-                  ingredientsModal.originalProduct.prices?.[0]?.price || 0;
-    }
+    // El precio del item ya incluye el fee_togo si viene de una orden existente
+    // Solo necesitamos agregar el precio de ingredientes adicionales si hay más de uno
+    let total = ingredientsModal.item.price || 0;
     
-    const extraIngredientsPrice = ingredientsModal.originalProduct?.extraIngredientsPrice || 0;
-    // Obtener fee_togo del item o del originalProduct
+    // Si el precio es 0, intentar obtenerlo del producto original
+    if (total === 0 && ingredientsModal.originalProduct) {
+      total = (ingredientsModal.originalProduct as any).price || 
+                  ingredientsModal.originalProduct.prices?.[0]?.price || 0;
+    
+      // Si es para llevar y es una crepa, agregar el fee_togo solo si no está incluido
     const takeoutPrice = ingredientsModal.item.fee_togo || 
                         (ingredientsModal.originalProduct as any)?.fee_togo || 0;
-    
-    let total = basePrice;
-    
-    // Si hay más de un ingrediente adicional, agregar el precio extra
-    if (additionalIngredients.length > 1) {
-      total += extraIngredientsPrice;
+      if (isTakeout && takeoutPrice > 0 && (ingredientsModal.item.category === 'crepa' || ingredientsModal.item.category === 'crepas')) {
+        total += takeoutPrice;
+      }
     }
     
-    // Si es para llevar, agregar el precio para llevar
-    if (isTakeout && takeoutPrice > 0) {
-      total += takeoutPrice;
+    // Agregar precio de ingredientes adicionales si hay más de uno
+    const extraIngredientsPrice = ingredientsModal.originalProduct?.extraIngredientsPrice || 0;
+    if (additionalIngredients.length > 1) {
+      total += extraIngredientsPrice;
     }
     
     return total;
   };
 
   // Función para mostrar/ocultar todos los ingredientes
-  const handleShowAllIngredients = () => {
+  const handleShowAllIngredients = async () => {
     if (showAllIngredients) {
       setShowAllIngredients(false);
     } else {
-      // Por ahora, usar datos hardcodeados. Se pueden obtener de API después
-      if (crepeIngredients.length === 0) {
-        // Datos de ejemplo - se pueden obtener de API
-        setCrepeIngredients([
-          { name: 'Cajeta', category: 'dulce', available: true },
-          { name: 'Nuez', category: 'dulce', available: true },
-          { name: 'Almendra', category: 'dulce', available: true },
-          { name: 'Miel', category: 'dulce', available: true },
-          { name: 'Chocolate', category: 'dulce', available: true },
-          { name: 'Queso', category: 'salado', available: true },
-          { name: 'Jamón', category: 'salado', available: true },
-          { name: 'Pollo', category: 'salado', available: true },
-        ]);
-      }
-      if (crepeFruits.length === 0) {
-        setCrepeFruits([
-          { name: 'Fresa', category: 'fruta', available: true },
-          { name: 'Plátano', category: 'fruta', available: true },
-          { name: 'Durazno', category: 'fruta', available: true },
-          { name: 'Mango', category: 'fruta', available: true },
-          { name: 'Kiwi', category: 'fruta', available: true },
-        ]);
+      // Cargar ingredientes y frutas desde la API si no están cargados
+      if (crepeIngredients.length === 0 || crepeFruits.length === 0) {
+        try {
+          const [ingredientsResponse, fruitsResponse] = await Promise.all([
+            ProductService.getCrepeIngredients(),
+            ProductService.getCrepeFruits()
+          ]);
+          
+          if (ingredientsResponse.success && ingredientsResponse.data) {
+            setCrepeIngredients(ingredientsResponse.data);
+          }
+          
+          if (fruitsResponse.success && fruitsResponse.data) {
+            setCrepeFruits(fruitsResponse.data);
+          }
+        } catch (error: any) {
+          console.error('Error loading ingredients:', error);
+          showError('No se pudieron cargar los ingredientes');
+        }
       }
       setShowAllIngredients(true);
     }
@@ -1178,10 +1586,13 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
   };
 
   return (
+    <>
+      <ToastComponent />
     <Modal
       visible={isOpen}
       animationType="slide"
       transparent={false}
+        presentationStyle="fullScreen"
       onRequestClose={onClose}
     >
       <View style={styles.modalContainer}>
@@ -1508,30 +1919,91 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
                           ]} 
                           numberOfLines={2}
                         >
-                          {item.name}
+                          {item.name || ''}
                         </Text>
                       </TouchableOpacity>
                       <Text style={styles.orderItemPrice}>
-                        ${item.price.toFixed(2)}
+                        ${(item.price || 0).toFixed(2)}
                       </Text>
                     </View>
+                    {/* Mostrar solo "sin:" para ingredientes esenciales no seleccionados */}
                     {item.excludedIngredients &&
                       item.excludedIngredients.length > 0 && (
                         <Text style={styles.orderItemDetail}>
-                          sin {item.excludedIngredients.join(', ')}
+                          sin: {(item.excludedIngredients || []).join(', ')}
                         </Text>
                       )}
-                    {item.selectedFruits && item.selectedFruits.length > 0 && (
-                      <Text style={styles.orderItemDetailFruit}>
-                        con {item.selectedFruits.join(', ')}
+                    {/* Mostrar solo "con:" para ingredientes adicionales */}
+                    {(() => {
+                      const additionalIngs = (item.additionalIngredients || []).map((ing: any) => {
+                        if (typeof ing === 'string' && ing.trim() !== '') return ing;
+                        if (ing && typeof ing === 'object' && ing.name && typeof ing.name === 'string' && ing.name.trim() !== '') return ing.name;
+                        return null;
+                      }).filter((name: string | null): name is string => name !== null && name !== undefined);
+                      const fruits = (item.selectedFruits || [])
+                        .map((fruit: any) => {
+                          if (typeof fruit === 'string' && fruit.trim() !== '') return fruit;
+                          if (fruit && typeof fruit === 'object' && fruit.name && typeof fruit.name === 'string' && fruit.name.trim() !== '') return fruit.name;
+                          return null;
+                        })
+                        .filter((fruit: string | null): fruit is string => fruit !== null && fruit !== undefined && fruit.trim() !== '');
+                      const allAdditional = [...additionalIngs, ...fruits].filter((ing: string | null | undefined): ing is string => {
+                        return ing !== null && ing !== undefined && typeof ing === 'string' && ing.trim() !== '';
+                      });
+                      
+                      if (allAdditional.length > 0) {
+                        return (
+                          <Text style={styles.orderItemDetailIngredient}>
+                            con: {allAdditional.join(', ')}
+                          </Text>
+                        );
+                      }
+                      return null;
+                    })()}
+                    {item.additionalIngredients && item.additionalIngredients.length >= 2 && (
+                      <Text style={styles.orderItemAdditionalCharge}>
+                        Ingredientes adicionales (+$5.00)
                       </Text>
                     )}
-                    {isTakeout && item.takeoutFee && item.takeoutFee > 0 && (
+                    {/* Mostrar opciones adicionales de bebidas */}
+                    {item.category === 'bebida' && (() => {
+                      const options: string[] = [];
+                      if (item.deslactosado) options.push('Deslactosado');
+                      if (item.sinAzucar) options.push('Sin Azúcar');
+                      if (item.sinCremaBatida) options.push('Sin crema batida');
+                      const displayText = (item.comments && item.comments.trim() !== '') ? item.comments : (options.length > 0 ? options.join(', ') : '');
+                      return displayText && displayText.trim() !== '' ? (
+                        <Text style={styles.orderItemDetailIngredient}>
+                          {displayText}
+                        </Text>
+                      ) : null;
+                    })()}
+                    {/* Mostrar "Para llevar" si es orden para llevar global o si el item individual está marcado como "para llevar" */}
+                    {((isTakeout && (item.takeoutFee || item.fee_togo) && (item.takeoutFee || item.fee_togo || 0) > 0) || 
+                      (!isTakeout && item.itemTakeout && (item.takeoutFee || item.fee_togo || 0) > 0)) && (
                       <Text style={styles.orderItemTakeout}>
-                        📦 Para llevar (+${item.takeoutFee})
+                        📦 Para llevar (+${(item.takeoutFee || item.fee_togo || 0).toFixed(2)})
                       </Text>
                     )}
                     <View style={styles.orderItemActions}>
+                      {/* Botón para marcar item como "para llevar" (solo en órdenes de mesa) */}
+                      {!isTakeout && item.category === 'crepa' && (
+                        <TouchableOpacity
+                          style={[
+                            styles.itemTakeoutButton,
+                            item.itemTakeout && styles.itemTakeoutButtonActive,
+                          ]}
+                          onPress={() => toggleItemTakeout(item.id)}
+                          disabled={readOnly}
+                        >
+                          <Text style={[
+                            styles.itemTakeoutButtonText,
+                            item.itemTakeout && styles.itemTakeoutButtonTextActive,
+                          ]}>
+                            📦
+                          </Text>
+                        </TouchableOpacity>
+                      )}
                       <TouchableOpacity
                         style={styles.quantityButton}
                         onPress={() => updateQuantity(item.id, -1)}
@@ -1539,7 +2011,7 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
                       >
                         <Text style={styles.quantityButtonText}>−</Text>
                       </TouchableOpacity>
-                      <Text style={styles.quantityText}>{item.quantity}</Text>
+                      <Text style={styles.quantityText}>{item.quantity || 0}</Text>
                       <TouchableOpacity
                         style={styles.quantityButton}
                         onPress={() => updateQuantity(item.id, 1)}
@@ -1574,6 +2046,7 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
           visible={drinkOptionsModal.open}
           transparent={true}
           animationType="fade"
+          presentationStyle="overFullScreen"
           onRequestClose={() =>
             setDrinkOptionsModal({ open: false, drink: null })
           }
@@ -1648,12 +2121,77 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
                   </TouchableOpacity>
                 )}
 
+              {/* Opciones adicionales para frappés */}
+              {drinkOptionsModal.drink &&
+                isFrappe(drinkOptionsModal.drink as any) && (
+                  <View style={styles.additionalOptionsContainer}>
+                    <Text style={styles.additionalOptionsTitle}>
+                      Opciones adicionales:
+                    </Text>
+                    <View style={styles.additionalOptionsRow}>
+                      <TouchableOpacity
+                        style={[
+                          styles.additionalOptionButton,
+                          deslactosado && styles.additionalOptionButtonActive,
+                        ]}
+                        onPress={() => setDeslactosado(!deslactosado)}
+                      >
+                        <Text
+                          style={[
+                            styles.additionalOptionText,
+                            deslactosado && styles.additionalOptionTextActive,
+                          ]}
+                        >
+                          Deslactosado
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[
+                          styles.additionalOptionButton,
+                          sinAzucar && styles.additionalOptionButtonActive,
+                        ]}
+                        onPress={() => setSinAzucar(!sinAzucar)}
+                      >
+                        <Text
+                          style={[
+                            styles.additionalOptionText,
+                            sinAzucar && styles.additionalOptionTextActive,
+                          ]}
+                        >
+                          Sin Azúcar
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[
+                          styles.additionalOptionButton,
+                          sinCremaBatida && styles.additionalOptionButtonActive,
+                        ]}
+                        onPress={() => setSinCremaBatida(!sinCremaBatida)}
+                      >
+                        <Text
+                          style={[
+                            styles.additionalOptionText,
+                            sinCremaBatida && styles.additionalOptionTextActive,
+                          ]}
+                        >
+                          Sin crema batida
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
+
               <View style={styles.drinkModalActions}>
                 <TouchableOpacity
                   style={styles.modalCancelButton}
-                  onPress={() =>
-                    setDrinkOptionsModal({ open: false, drink: null })
-                  }
+                  onPress={() => {
+                    setDrinkOptionsModal({ open: false, drink: null });
+                    setSelectedPriceOption('');
+                    setWithPearls(false);
+                    setDeslactosado(false);
+                    setSinAzucar(false);
+                    setSinCremaBatida(false);
+                  }}
                 >
                   <Text style={styles.modalCancelButtonText}>Cancelar</Text>
                 </TouchableOpacity>
@@ -1677,6 +2215,7 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
           visible={ingredientsModal.open}
           transparent={true}
           animationType="slide"
+          presentationStyle="overFullScreen"
           onRequestClose={handleIngredientsCancel}
         >
           <View style={styles.ingredientsModalOverlay}>
@@ -1708,7 +2247,7 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
 
                 {/* Ingredients Selection */}
                 <View style={styles.ingredientsSection}>
-                  <Text style={styles.ingredientsSectionTitle}>Ingredientes disponibles:</Text>
+                  <Text style={styles.ingredientsSectionTitle}>Ingredientes esenciales:</Text>
                   <View style={styles.ingredientsGrid}>
                     {ingredientsModal.originalProduct?.ingredients && 
                      Array.isArray(ingredientsModal.originalProduct.ingredients) &&
@@ -1755,7 +2294,7 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
                 {showAllIngredients && (
                   <View style={styles.allIngredientsSection}>
                     <Text style={styles.allIngredientsTitle}>
-                      Todos los ingredientes disponibles en crepas:
+                      Ingredientes adicionales:
                     </Text>
                     
                     {/* Tabs para categorías de ingredientes */}
@@ -1909,52 +2448,6 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
                   </View>
                 )}
 
-                {/* Desglose de precios */}
-                {ingredientsModal.item && (() => {
-                  // Obtener precio base del item o del originalProduct si no está disponible
-                  let basePrice = ingredientsModal.item.price || 0;
-                  if (basePrice === 0 && ingredientsModal.originalProduct) {
-                    basePrice = (ingredientsModal.originalProduct as any).price || 
-                                ingredientsModal.originalProduct.prices?.[0]?.price || 0;
-                  }
-                  
-                  // Obtener fee_togo del item o del originalProduct
-                  const takeoutPrice = ingredientsModal.item.fee_togo || 
-                                      (ingredientsModal.originalProduct as any)?.fee_togo || 0;
-                  
-                  return (
-                    <View style={styles.priceBreakdown}>
-                      <Text style={styles.priceBreakdownTitle}>Desglose de precios:</Text>
-                      <View style={styles.priceBreakdownRow}>
-                        <Text style={styles.priceBreakdownLabel}>Precio base:</Text>
-                        <Text style={styles.priceBreakdownValue}>${basePrice}</Text>
-                      </View>
-                      {additionalIngredients.length > 1 && ingredientsModal.originalProduct?.extraIngredientsPrice && ingredientsModal.originalProduct.extraIngredientsPrice > 0 && (
-                        <View style={styles.priceBreakdownRow}>
-                          <Text style={styles.priceBreakdownLabel}>Ingredientes adicionales:</Text>
-                          <Text style={styles.priceBreakdownValueOrange}>
-                            +${ingredientsModal.originalProduct.extraIngredientsPrice}
-                          </Text>
-                        </View>
-                      )}
-                      {isTakeout && ingredientsModal.item?.type === 'crepa' && takeoutPrice > 0 && (
-                        <View style={styles.priceBreakdownRow}>
-                          <Text style={styles.priceBreakdownLabel}>Precio para llevar:</Text>
-                          <Text style={styles.priceBreakdownValueOrange}>
-                            +${takeoutPrice}
-                          </Text>
-                        </View>
-                      )}
-                      <View style={styles.priceBreakdownDivider} />
-                      <View style={styles.priceBreakdownRow}>
-                        <Text style={styles.priceBreakdownTotalLabel}>Total:</Text>
-                        <Text style={styles.priceBreakdownTotalValue}>
-                          ${calculateTotalPrice()}
-                        </Text>
-                      </View>
-                    </View>
-                  );
-                })()}
 
                 {/* Mensaje de validación para frutas */}
                 {showFruitValidationError && (
@@ -1963,26 +2456,54 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
                   </Text>
                 )}
 
-                {/* Selected Ingredients Summary */}
-                {(selectedIngredients.length > 0 || (selectedFruits.length > 0 && selectedIngredients.some(ingredient => ingredient.toLowerCase().includes('fruta')))) && (
-                  <View style={styles.selectedCustomizationSection}>
-                    <Text style={styles.selectedCustomizationTitle}>
-                      Personalización seleccionada:
-                    </Text>
-                    {selectedIngredients.length > 0 && (
-                      <Text style={styles.selectedCustomizationText}>
-                        <Text style={styles.selectedCustomizationBold}>Ingredientes: </Text>
-                        <Text>{selectedIngredients.join(', ')}</Text>
-                      </Text>
-                    )}
-                    {selectedFruits.length > 0 && selectedIngredients.some(ingredient => ingredient.toLowerCase().includes('fruta')) && (
-                      <Text style={styles.selectedCustomizationText}>
-                        <Text style={styles.selectedCustomizationBold}>Frutas: </Text>
-                        <Text>{selectedFruits.join(', ')}</Text>
-                      </Text>
-                    )}
-                  </View>
-                )}
+                {/* Selected Ingredients Summary - Solo mostrar "sin:" y "con:" */}
+                {(() => {
+                  // Calcular ingredientes esenciales no seleccionados (excluidos)
+                  const excludedEssentialIngredients: string[] = [];
+                  if (ingredientsModal.originalProduct?.ingredients && Array.isArray(ingredientsModal.originalProduct.ingredients)) {
+                    ingredientsModal.originalProduct.ingredients.forEach((ingredient: any) => {
+                      const ingredientName = typeof ingredient === 'string' ? ingredient : ingredient.name;
+                      const isAvailable = typeof ingredient === 'string' ? true : (ingredient.available !== false);
+                      if (isAvailable && !selectedIngredients.includes(ingredientName)) {
+                        excludedEssentialIngredients.push(ingredientName);
+                      }
+                    });
+                  }
+                  
+                  // Calcular ingredientes adicionales seleccionados
+                  const additionalIngs = additionalIngredients.map((ing: any) => {
+                    if (typeof ing === 'string') return ing;
+                    if (ing && typeof ing === 'object' && ing.name) return ing.name;
+                    return null;
+                  }).filter((name: string | null): name is string => name !== null && name !== undefined);
+                  
+                  const fruits = selectedFruits.filter((fruit: string) => fruit && fruit.trim() !== '');
+                  const allAdditional = [...additionalIngs, ...fruits].filter((ing: string) => ing && ing.trim() !== '');
+                  
+                  // Solo mostrar si hay ingredientes esenciales excluidos o ingredientes adicionales
+                  if (excludedEssentialIngredients.length > 0 || allAdditional.length > 0) {
+                    return (
+                      <View style={styles.selectedCustomizationSection}>
+                        <Text style={styles.selectedCustomizationTitle}>
+                          Personalización seleccionada:
+                        </Text>
+                        {excludedEssentialIngredients.length > 0 && (
+                          <Text style={styles.selectedCustomizationText}>
+                            <Text style={styles.selectedCustomizationBold}>sin: </Text>
+                            <Text>{excludedEssentialIngredients.join(', ')}</Text>
+                          </Text>
+                        )}
+                        {allAdditional.length > 0 && (
+                          <Text style={styles.selectedCustomizationText}>
+                            <Text style={styles.selectedCustomizationBold}>con: </Text>
+                            <Text>{allAdditional.join(', ')}</Text>
+                          </Text>
+                        )}
+                      </View>
+                    );
+                  }
+                  return null;
+                })()}
               </ScrollView>
 
               {/* Action Buttons */}
@@ -2004,6 +2525,7 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
           </View>
         </Modal>
     </Modal>
+    </>
   );
 };
 
@@ -2357,10 +2879,22 @@ const styles = StyleSheet.create({
     color: '#d32f2f',
     marginBottom: 2,
   },
+  orderItemDetailIngredient: {
+    fontSize: 10,
+    color: '#4CAF50',
+    marginBottom: 2,
+    fontWeight: '500',
+  },
   orderItemDetailFruit: {
     fontSize: 10,
     color: '#4CAF50',
     marginBottom: 2,
+  },
+  orderItemAdditionalCharge: {
+    fontSize: 10,
+    color: '#FF9800',
+    marginBottom: 2,
+    fontWeight: 'bold',
   },
   orderItemTakeout: {
     fontSize: 10,
@@ -2386,6 +2920,27 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     color: '#333',
+  },
+  itemTakeoutButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 4,
+    backgroundColor: '#f5f5f5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  itemTakeoutButtonActive: {
+    backgroundColor: '#FF9800',
+    borderColor: '#FF9800',
+  },
+  itemTakeoutButtonText: {
+    fontSize: 16,
+  },
+  itemTakeoutButtonTextActive: {
+    color: '#fff',
   },
   quantityText: {
     fontSize: 14,
@@ -2503,6 +3058,42 @@ const styles = StyleSheet.create({
   },
   pearlsButtonPriceActive: {
     color: '#fff',
+  },
+  additionalOptionsContainer: {
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  additionalOptionsTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 8,
+  },
+  additionalOptionsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  additionalOptionButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    backgroundColor: 'transparent',
+  },
+  additionalOptionButtonActive: {
+    backgroundColor: '#FF9800',
+    borderColor: '#FF9800',
+  },
+  additionalOptionText: {
+    fontSize: 12,
+    color: '#333',
+    fontWeight: '500',
+  },
+  additionalOptionTextActive: {
+    color: '#fff',
+    fontWeight: 'bold',
   },
   drinkModalActions: {
     flexDirection: 'row',

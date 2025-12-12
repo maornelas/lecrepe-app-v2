@@ -672,6 +672,7 @@ const ProductosScreen: React.FC<ProductosScreenProps> = ({ navigation }) => {
         visible={modalOpen}
         transparent={false}
         animationType="slide"
+        presentationStyle="fullScreen"
         onRequestClose={() => setModalOpen(false)}
       >
         <SafeAreaView style={styles.modalFullScreen}>
@@ -993,6 +994,7 @@ const ProductosScreen: React.FC<ProductosScreenProps> = ({ navigation }) => {
         visible={newCategoryModalOpen}
         transparent={true}
         animationType="slide"
+        presentationStyle="overFullScreen"
         onRequestClose={() => setNewCategoryModalOpen(false)}
       >
         <View style={styles.modalOverlay}>
@@ -1040,6 +1042,7 @@ const ProductosScreen: React.FC<ProductosScreenProps> = ({ navigation }) => {
         visible={newSubCategoryModalOpen}
         transparent={true}
         animationType="slide"
+        presentationStyle="overFullScreen"
         onRequestClose={() => setNewSubCategoryModalOpen(false)}
       >
         <View style={styles.modalOverlay}>

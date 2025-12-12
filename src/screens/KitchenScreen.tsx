@@ -641,6 +641,7 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({ navigation }) => {
         visible={orderDetailOpen}
         transparent={false}
         animationType="slide"
+        presentationStyle="fullScreen"
         onRequestClose={() => setOrderDetailOpen(false)}
       >
         <SafeAreaView style={styles.modalFullScreen}>
@@ -729,6 +730,13 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({ navigation }) => {
                         const excludedToppings = item.toppings && Array.isArray(item.toppings) 
                           ? item.toppings.filter((t: any) => t.selected === false)
                           : [];
+                        // Obtener opciones adicionales desde comments
+                        const comments = item.comments || '';
+                        const commentsLower = comments.toLowerCase();
+                        const hasAdditionalOptions = commentsLower.includes('deslactosado') || 
+                                                     commentsLower.includes('sin azúcar') || 
+                                                     commentsLower.includes('sin azucar') || 
+                                                     commentsLower.includes('sin crema batida');
                         
                         return (
                           <View key={index} style={styles.productListItem}>
@@ -737,15 +745,20 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({ navigation }) => {
                                 <Text style={styles.productIconText}>☕</Text>
                               </View>
                               <View style={styles.productInfo}>
-                                <Text style={styles.productListItemName}>{itemName}</Text>
+                                <View style={styles.productNameRow}>
+                                  <Text style={styles.productQuantityBadge}>{itemUnits}</Text>
+                                  <Text style={styles.productListItemName}>{itemName}</Text>
+                                </View>
                                 {excludedToppings.length > 0 && (
                                   <Text style={styles.toppingsText}>
-                                    sin {excludedToppings.map((t: any) => t.name).join(', ')}
+                                    sin: {excludedToppings.map((t: any) => t.name).join(', ')}
                                   </Text>
                                 )}
-                                <Text style={styles.productListItemQuantity}>
-                                  cant: <Text style={styles.productListItemQuantityBold}>{itemUnits}</Text>
-                    </Text>
+                                {hasAdditionalOptions && (
+                                  <Text style={styles.additionalIngredientsText}>
+                                    {comments}
+                                  </Text>
+                                )}
                   </View>
                             </View>
                           </View>
@@ -773,10 +786,28 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({ navigation }) => {
                       return crepes.map((item: any, index: number) => {
                         const itemName = item.name || item.product_name || 'Sin nombre';
                         const itemUnits = item.units || 0;
-                        // Obtener ingredientes excluidos desde toppings
+                        // Obtener ingredientes esenciales excluidos (selected === false)
                         const excludedToppings = item.toppings && Array.isArray(item.toppings) 
                           ? item.toppings.filter((t: any) => t.selected === false)
                           : [];
+                        // Obtener ingredientes adicionales (marcados con additional: true o selected: true sin marca)
+                        // Solo mostrar ingredientes adicionales, NO los ingredientes esenciales seleccionados
+                        const additionalToppings = item.toppings && Array.isArray(item.toppings)
+                          ? item.toppings.filter((t: any) => {
+                              // Si tiene marca additional: true, es adicional
+                              if (t.additional === true) return true;
+                              // Si tiene selected: true pero no tiene marca additional, también es adicional
+                              // (porque los ingredientes esenciales seleccionados ya no se guardan como toppings)
+                              if (t.selected === true && t.selected !== false) return true;
+                              return false;
+                            })
+                          : [];
+                        const additionalIngredients = additionalToppings.map((t: any) => t.name);
+                        
+                        // Verificar si el item es "para llevar" individualmente (en órdenes de mesa)
+                        const isItemTakeout = item.item_togo === true || 
+                                             (item.comments && item.comments.toLowerCase().includes('para llevar') && !selectedOrder?.togo);
+                        const takeoutFee = item.takeout_fee || (isItemTakeout ? 10 : 0);
                         
                         return (
                           <View key={index} style={styles.productListItem}>
@@ -785,15 +816,25 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({ navigation }) => {
                                 <Text style={styles.productIconText}>🍕</Text>
                               </View>
                               <View style={styles.productInfo}>
-                                <Text style={styles.productListItemName}>{itemName}</Text>
+                                <View style={styles.productNameRow}>
+                                  <Text style={styles.productQuantityBadge}>{itemUnits}</Text>
+                                  <Text style={styles.productListItemName}>{itemName}</Text>
+                                </View>
                                 {excludedToppings.length > 0 && (
                                   <Text style={styles.toppingsText}>
-                                    sin {excludedToppings.map((t: any) => t.name).join(', ')}
+                                    sin: {excludedToppings.map((t: any) => t.name).join(', ')}
                                   </Text>
                                 )}
-                                <Text style={styles.productListItemQuantity}>
-                                  cant: <Text style={styles.productListItemQuantityBold}>{itemUnits}</Text>
-                    </Text>
+                                {additionalIngredients.length > 0 && (
+                                  <Text style={styles.additionalIngredientsText}>
+                                    con: {additionalIngredients.join(', ')}
+                                  </Text>
+                                )}
+                                {isItemTakeout && (
+                                  <Text style={styles.itemTakeoutText}>
+                                    📦 Para llevar (+${takeoutFee.toFixed(2)})
+                                  </Text>
+                                )}
                   </View>
                             </View>
                           </View>
@@ -1183,19 +1224,24 @@ const styles = StyleSheet.create({
   productInfo: {
     flex: 1,
   },
+  productNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
   productListItemName: {
     fontSize: 14,
     fontWeight: '600',
     color: '#333',
-    marginBottom: 4,
+    flex: 1,
   },
-  productListItemQuantity: {
-    fontSize: 12,
-    color: '#666',
-  },
-  productListItemQuantityBold: {
+  productQuantityBadge: {
+    fontSize: 14,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#000000',
+    marginRight: 8,
+    minWidth: 20,
+    textAlign: 'left',
   },
   noItemsText: {
     fontSize: 12,
@@ -1235,7 +1281,20 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#666',
     marginTop: 4,
+    marginBottom: 2,
+  },
+  itemTakeoutText: {
+    fontSize: 11,
+    color: '#FF9800',
+    fontWeight: 'bold',
+    marginTop: 4,
     fontStyle: 'italic',
+  },
+  additionalIngredientsText: {
+    fontSize: 11,
+    color: '#4CAF50',
+    marginTop: 4,
+    fontWeight: '500',
   },
   extrasText: {
     fontSize: 11,

@@ -236,6 +236,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         visible={menuVisible}
         transparent={true}
         animationType="fade"
+        presentationStyle="overFullScreen"
         onRequestClose={() => setMenuVisible(false)}
       >
         <TouchableOpacity

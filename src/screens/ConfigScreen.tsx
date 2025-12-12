@@ -43,6 +43,7 @@ const ConfigScreen: React.FC<ConfigScreenProps> = ({ navigation }) => {
     isScanning,
     isConnecting,
     bluetoothAvailable,
+    checkBluetooth,
     connectBluetoothDevice: connectDevice,
     disconnectBluetoothDevice: disconnectDevice,
     scanBluetoothDevices: scanDevices,
@@ -52,6 +53,12 @@ const ConfigScreen: React.FC<ConfigScreenProps> = ({ navigation }) => {
   useEffect(() => {
     loadSavedSettings();
     getLocalIP();
+    // Verificar disponibilidad de Bluetooth al cargar la pantalla
+    if (checkBluetooth) {
+      checkBluetooth().catch(err => {
+        console.warn('Error checking Bluetooth:', err);
+      });
+    }
   }, []);
 
   const loadSavedSettings = async () => {
