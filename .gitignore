@@ -53,3 +53,4 @@ ios/Pods/
 *.so
 *.o
 *.a
+utils/lecrepe-front
