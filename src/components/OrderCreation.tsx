@@ -893,9 +893,8 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
           id_order: editingOrder.id_order || editingOrder._id || (editingOrder as any).id,
         };
         await onSave(orderDataWithId);
-        showSuccess('Orden actualizada exitosamente');
+        // onSave ya maneja el toast y el cierre del modal, solo limpiar la orden
         resetOrder();
-        onClose();
       } else {
         // Modo creación: crear nueva orden
         console.log('🔍 DEBUG OrderCreation - Sending order to backend:', {
@@ -909,9 +908,8 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
         
         if (response.success) {
           console.log('🔍 DEBUG OrderCreation - Order created successfully:', response.data);
-          showSuccess('Orden creada exitosamente');
           
-          // Si onSave está definido (desde OrdenesScreen), llamarlo para actualizar el estado
+          // Si onSave está definido (desde MesasScreen u OrdenesScreen), delegar el manejo completo
           if (onSave) {
             const createdOrder = response.data || {};
             await onSave({
@@ -920,13 +918,16 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
               total: createdOrder.total || finalTotal,
               status: createdOrder.status || 'Pendiente',
             } as Partial<Order>);
-          }
-          
-          // Limpiar orden y cerrar modal después de un breve delay
-          setTimeout(() => {
+            // onSave ya maneja el toast y el cierre del modal, solo limpiar la orden
             resetOrder();
-            onClose();
-          }, 1000);
+          } else {
+            // Si no hay onSave (modo standalone), mostrar toast y cerrar modal
+            showSuccess('Orden creada exitosamente');
+            setTimeout(() => {
+              resetOrder();
+              onClose();
+            }, 1000);
+          }
         } else {
           console.error('🔍 DEBUG OrderCreation - Error creating order:', response);
           showError('No se pudo crear la orden');

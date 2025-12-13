@@ -168,11 +168,14 @@ const MesasScreen: React.FC<MesasScreenProps> = ({ navigation }) => {
     }
   };
 
-  const handleCloseOrderCreation = () => {
+  const handleCloseOrderCreation = (skipReload: boolean = false) => {
     setIsOrderCreationOpen(false);
     setIsViewingOrder(false);
     setSelectedTable(null);
-    loadData(); // Recargar datos para actualizar el estado de las mesas
+    // Solo recargar datos si no se especifica skipReload (para cuando se cierra manualmente)
+    if (!skipReload) {
+      loadData(); // Recargar datos para actualizar el estado de las mesas
+    }
   };
 
   const handleOrderCreated = async (orderData: Partial<Order>) => {
@@ -180,7 +183,7 @@ const MesasScreen: React.FC<MesasScreenProps> = ({ navigation }) => {
       // La orden ya fue creada por OrderCreation, recargamos los datos
       // loadData() actualizará automáticamente croquisTablesState
       await loadData();
-      handleCloseOrderCreation();
+      handleCloseOrderCreation(true); // Pasar true para evitar doble recarga
       showSuccess(`Orden creada para Mesa ${selectedTable?.name || ''}`);
     } catch (error: any) {
       console.error('Error handling order creation:', error);
@@ -213,7 +216,7 @@ const MesasScreen: React.FC<MesasScreenProps> = ({ navigation }) => {
       await OrderLecrepeService.updateOrderLecrepe(orderId, orderDataWithoutId);
       // loadData() actualizará automáticamente croquisTablesState
       await loadData();
-      handleCloseOrderCreation();
+      handleCloseOrderCreation(true); // Pasar true para evitar doble recarga
       showSuccess(`Orden actualizada para Mesa ${selectedTable?.name || ''}`);
     } catch (error: any) {
       console.error('Error handling order update:', error);
