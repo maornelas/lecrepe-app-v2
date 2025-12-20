@@ -14,9 +14,11 @@ import {
 } from 'react-native';
 import TcpSocket from 'react-native-tcp-socket';
 import { OrderLecrepeService } from '../services/orderLecrepeService';
+import { OrderService } from '../services/orderService';
 import { StorageService } from '../services/storageService';
 import { useBluetooth } from '../contexts/BluetoothContext';
 import { Order } from '../types';
+import { useToast } from '../hooks/useToast';
 
 // Declaración de tipos para TextEncoder (disponible en React Native)
 declare const TextEncoder: {
@@ -37,9 +39,14 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
+  const [isClosingDay, setIsClosingDay] = useState(false);
+  const [isPrintingDay, setIsPrintingDay] = useState(false);
   
   // Usar contexto de Bluetooth
   const { isBluetoothEnabled, bluetoothDevice, sendToBluetooth } = useBluetooth();
+  
+  // Usar hook de toast para notificaciones
+  const { showSuccess, showError, ToastComponent } = useToast();
 
   useEffect(() => {
     loadOrders();
@@ -57,18 +64,22 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({ navigation }) => {
       }
       const idStore = await StorageService.getItem('idStore');
       if (!idStore) {
-        Alert.alert('Error', 'No se encontró el ID de la tienda');
+        if (!silent) {
+          showError('No se encontró el ID de la tienda');
+        }
         return;
       }
 
       const response = await OrderLecrepeService.getAllOrdersLecrepe(parseInt(idStore));
       if (response.data) {
-        setOrders(response.data);
+        // Excluir órdenes "Finalizadas" (igual que kokoro-front)
+        const filteredOrders = response.data.filter((order: Order) => order.status !== 'Finalizada');
+        setOrders(filteredOrders);
       }
     } catch (error: any) {
       console.error('Error loading orders:', error);
       if (!silent) {
-        Alert.alert('Error', 'No se pudieron cargar las órdenes');
+        showError('No se pudieron cargar las órdenes');
       }
     } finally {
       if (!silent) {
@@ -84,21 +95,356 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({ navigation }) => {
   };
 
   const getPendingOrders = () => {
-    return orders.filter((order) => order.status === 'Pendiente');
+    return orders.filter((order) => order.status === 'Pendiente' && order.status !== 'Finalizada');
   };
 
   const getReadyOrders = () => {
-    return orders.filter((order) => order.status === 'Lista');
+    return orders.filter((order) => order.status === 'Lista' && order.status !== 'Finalizada');
   };
 
   const getClosedOrders = () => {
     return orders.filter(
-      (order) => order.status === 'Cerrada' || order.status === 'Entregada'
+      (order) => (order.status === 'Cerrada' || order.status === 'Entregada') && order.status !== 'Finalizada'
     );
   };
 
   const getCanceledOrders = () => {
-    return orders.filter((order) => order.status === 'Cancelada');
+    return orders.filter((order) => order.status === 'Cancelada' && order.status !== 'Finalizada');
+  };
+
+  const handleCloseDay = async () => {
+    Alert.alert(
+      'Cierre del Día',
+      '¿Seguro cerrar el día?\n\nTodas las órdenes cerradas ya no se mostrarán.',
+      [
+        {
+          text: 'NO',
+          style: 'cancel',
+        },
+        {
+          text: 'SÍ',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setIsClosingDay(true);
+              const idStore = await StorageService.getItem('idStore');
+              if (!idStore) {
+                showError('No se encontró el ID de la tienda');
+                setIsClosingDay(false);
+                return;
+              }
+
+              // Obtener todas las órdenes
+              const response = await OrderLecrepeService.getAllOrdersLecrepe(parseInt(idStore));
+              let allOrders: Order[] = [];
+              
+              if (response && response.data) {
+                if (Array.isArray(response.data)) {
+                  allOrders = response.data;
+                } else if (response.data.orders && Array.isArray(response.data.orders)) {
+                  allOrders = response.data.orders;
+                }
+              }
+
+              // Filtrar órdenes que NO están finalizadas (para validar que todas estén cerradas)
+              const nonFinalizedOrders = allOrders.filter(order => order.status !== 'Finalizada');
+
+              // Verificar que todas las órdenes (excepto las finalizadas) estén cerradas
+              const nonClosedOrders = nonFinalizedOrders.filter(order => 
+                order.status !== 'Cerrada' && order.status !== 'Entregada'
+              );
+
+              if (nonClosedOrders.length > 0) {
+                const statusCounts: Record<string, number> = {};
+                nonClosedOrders.forEach(order => {
+                  statusCounts[order.status] = (statusCounts[order.status] || 0) + 1;
+                });
+                
+                const statusList = Object.entries(statusCounts)
+                  .map(([status, count]) => `${status}: ${count}`)
+                  .join('\n');
+                
+                Alert.alert(
+                  'No se puede cerrar el día',
+                  `Todas las órdenes deben estar cerradas antes de hacer el cierre del día.\n\nÓrdenes pendientes:\n${statusList}\n\nPor favor, cierra todas las órdenes antes de continuar.`,
+                  [{ text: 'OK' }]
+                );
+                setIsClosingDay(false);
+                return;
+              }
+
+              // Filtrar órdenes cerradas (igual que kokoro-front)
+              const ordersToFinalize = allOrders.filter(order => {
+                const isClosedOrDelivered = order.status === 'Cerrada' || order.status === 'Entregada';
+                const notFinalized = order.status !== 'Finalizada';
+                return isClosedOrDelivered && notFinalized;
+              });
+
+              if (ordersToFinalize.length === 0) {
+                showError('No hay órdenes cerradas para finalizar');
+                setIsClosingDay(false);
+                return;
+              }
+
+              // Actualizar cada orden a estado "Finalizada" (igual que kokoro-front)
+              let successCount = 0;
+              let errorCount = 0;
+
+              for (const order of ordersToFinalize) {
+                try {
+                  const orderId = order.id_order || order.id || order._id;
+                  if (orderId) {
+                    await OrderLecrepeService.updateOrderLecrepe(orderId, { status: 'Finalizada' });
+                    successCount++;
+                  }
+                } catch (error) {
+                  console.error(`Error finalizando orden ${order.id_order}:`, error);
+                  errorCount++;
+                }
+              }
+
+              // Recargar las órdenes
+              await loadOrders();
+
+              if (errorCount === 0) {
+                showSuccess(`El día fue cerrado correctamente. Se finalizaron ${successCount} órdenes.`);
+              } else {
+                showError(`Se finalizaron ${successCount} órdenes, pero ${errorCount} tuvieron errores.`);
+              }
+            } catch (error: any) {
+              console.error('Error en cierre del día:', error);
+              showError('No se pudo completar el cierre del día: ' + (error.message || 'Error desconocido'));
+            } finally {
+              setIsClosingDay(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handlePrintDay = async () => {
+    setIsPrintingDay(true);
+    try {
+      // Verificar configuración Bluetooth
+      if (!bluetoothDevice) {
+        showError('Por favor conecta un dispositivo Bluetooth en Configuración');
+        setIsPrintingDay(false);
+        return;
+      }
+
+      // Obtener todas las órdenes del día
+      const idStore = await StorageService.getItem('idStore');
+      if (!idStore) {
+        showError('No se encontró el ID de la tienda');
+        setIsPrintingDay(false);
+        return;
+      }
+
+      const response = await OrderLecrepeService.getAllOrdersLecrepe(parseInt(idStore));
+      let allOrders: Order[] = [];
+      
+      if (response && response.data) {
+        if (Array.isArray(response.data)) {
+          allOrders = response.data;
+        } else if (response.data.orders && Array.isArray(response.data.orders)) {
+          allOrders = response.data.orders;
+        } else if (typeof response.data === 'object') {
+          const arrayKey = Object.keys(response.data).find(key => Array.isArray(response.data[key]));
+          if (arrayKey) {
+            allOrders = response.data[arrayKey];
+          }
+        }
+      }
+
+      // Filtrar órdenes (todas las que se muestran en la app: cerradas, pendientes, listas, entregadas, pero no finalizadas)
+      // No filtrar por fecha para incluir todas las órdenes visibles, similar a cómo se muestran en la pantalla
+      const dayOrders = allOrders.filter(order => {
+        // Verificar que la orden tenga productos/items
+        const hasProducts = (order.products && order.products.length > 0) || (order.items && order.items.length > 0);
+        if (!hasProducts) return false;
+        
+        // Verificar estado (igual que getClosedOrders, getPendingOrders, etc.)
+        const validStatus = (order.status === 'Cerrada' || 
+                            order.status === 'Entregada' || 
+                            order.status === 'Pendiente' || 
+                            order.status === 'Lista') &&
+                           order.status !== 'Finalizada';
+        
+        return validStatus;
+      });
+
+      console.log('Total órdenes obtenidas:', allOrders.length);
+      console.log('Órdenes filtradas del día:', dayOrders.length);
+      console.log('Órdenes filtradas:', dayOrders.map(o => ({ id: o.id_order, status: o.status, products: (o.products || o.items || []).length })));
+
+      // Constante para precio de para llevar
+      const TOGO_PRICE = 10;
+
+      // Estructura dinámica de agregación (similar a kokoro backend)
+      const data: { [key: string]: { count: number; total: number; label: string } } = {};
+      let total = 0;
+      let totalExtras = 0;
+      let totalParaLlevar = 0;
+
+      // Procesar órdenes (similar al backend: usar order.products directamente)
+      dayOrders.forEach(order => {
+        // Usar products primero (como el backend), luego items como fallback
+        const products = order.products || order.items || [];
+        
+        if (!products || products.length === 0) {
+          console.warn('Orden sin productos:', order.id_order);
+          return;
+        }
+
+        products.forEach((item: any) => {
+          // Usar los mismos campos que el backend
+          // units puede venir como units o quantity
+          const units = item.units || item.quantity || 1;
+          const product_name = item.product_name || item.name || 'Sin nombre';
+          const type_name = item.type_name || item.option || 'Regular';
+          const type_price = item.type_price || item.price || 0;
+          const extras = item.extras || [];
+
+          const key = `${product_name}::${type_name}`;
+          
+          if (!data[key]) {
+            data[key] = {
+              count: 0,
+              total: 0,
+              label: `${product_name}: ${type_name}`,
+            };
+          }
+          
+          data[key].count += units;
+          data[key].total += type_price * units;
+          total += type_price * units;
+
+          // Calcular ganancia de extras (igual que el backend)
+          extras.forEach((extra: any) => {
+            totalExtras += extra.price || 0;
+          });
+        });
+
+        // Calcular ganancia para llevar (igual que el backend)
+        if (order.togo) {
+          const bebidasCount = products.filter(
+            (item: any) => (item.product_name || item.name) === 'Bebidas'
+          ).length || 0;
+          
+          totalParaLlevar += (products.length - bebidasCount) * TOGO_PRICE;
+        }
+      });
+
+      console.log('Resumen calculado:', {
+        itemsCount: Object.keys(data).length,
+        total,
+        totalExtras,
+        totalParaLlevar
+      });
+
+      // Ordenar items por label
+      const items = Object.values(data).sort((a, b) => a.label.localeCompare(b.label));
+
+      // Función para remover acentos
+      const removeAccents = (str: string): string => {
+        return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+          .replace(/[ñÑ]/g, (match) => match === 'ñ' ? 'n' : 'N')
+          .replace(/[áÁ]/g, 'A')
+          .replace(/[éÉ]/g, 'E')
+          .replace(/[íÍ]/g, 'I')
+          .replace(/[óÓ]/g, 'O')
+          .replace(/[úÚ]/g, 'U');
+      };
+
+      // Comandos ESC/POS
+      const ESC = '\x1B';
+      const centerText = ESC + 'a' + '\x01';
+      const leftAlign = ESC + 'a' + '\x00';
+      const resetFormat = ESC + '@';
+      const lineFeed = '\n';
+      const smallSize = ESC + '!' + '\x00';
+      const doubleSizeBold = ESC + '!' + '\x38';
+      const separator = isBluetoothEnabled ? '--------------------------------' : '---------------------------------------------';
+      const anchoDescripcion = isBluetoothEnabled ? 20 : 35;
+      const anchoPrecio = isBluetoothEnabled ? 8 : 10;
+
+      // Fecha y hora
+      const now = new Date();
+      const fecha = removeAccents(now.toLocaleDateString('es-MX'));
+      const hora = removeAccents(`${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`);
+      const fechaCompleta = removeAccents(now.toLocaleString('es-MX'));
+
+      // Generar resumen de ventas
+      let salida = 'Resumen de ventas:\n\n';
+      items.forEach(({ count, label, total }) => {
+        const labelSinAcentos = removeAccents(label);
+        const descripcion = `${count} - ${labelSinAcentos}`;
+        const descripcionTruncada = descripcion.length > anchoDescripcion 
+          ? descripcion.substring(0, anchoDescripcion - 3) + '...'
+          : descripcion;
+        salida += descripcionTruncada.padEnd(anchoDescripcion) + 
+                  `$${total.toFixed(2)}`.padStart(anchoPrecio) + 
+                  lineFeed;
+      });
+
+      const totalCierre = total + totalExtras + totalParaLlevar;
+      const totalFormateado = `$${totalCierre.toLocaleString('en-US', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      })}`;
+
+      // Generar contenido del ticket (similar a kokoro backend)
+      const ticketContent = resetFormat + smallSize +
+        centerText + doubleSizeBold + removeAccents('CORTE DEL DIA') + smallSize + lineFeed +
+        centerText + removeAccents('LECREPE') + lineFeed +
+        centerText + removeAccents('CD. MANUEL DOBLADO') + lineFeed +
+        removeAccents('Tel: 432-100-4990') + lineFeed +
+        leftAlign + separator + lineFeed +
+        `**CORTE DEL DIA` + lineFeed +
+        `FECHA: ${fechaCompleta}` + lineFeed +
+        separator + lineFeed +
+        separator + lineFeed +
+        (isBluetoothEnabled ? 'CANT DESCRIPCION    TOTAL\n' : 'CANT   DESCRIPCION                  TOTAL\n') +
+        separator + lineFeed +
+        salida +
+        separator + lineFeed +
+        (isBluetoothEnabled 
+          ? `SUBTOTAL:${' '.repeat(anchoDescripcion + anchoPrecio - 8 - total.toFixed(2).length)}$${total.toFixed(2)}` + lineFeed
+          : `SUBTOTAL:${' '.repeat(anchoDescripcion + anchoPrecio - 8 - total.toFixed(2).length)}$${total.toFixed(2)}` + lineFeed) +
+        separator + lineFeed +
+        (isBluetoothEnabled
+          ? `EXTRAS:${' '.repeat(anchoDescripcion + anchoPrecio - 6 - totalExtras.toFixed(2).length)}$${totalExtras.toFixed(2)}` + lineFeed
+          : `EXTRAS:${' '.repeat(anchoDescripcion + anchoPrecio - 6 - totalExtras.toFixed(2).length)}$${totalExtras.toFixed(2)}` + lineFeed) +
+        separator + lineFeed +
+        (isBluetoothEnabled
+          ? `PARA LLEVAR:${' '.repeat(anchoDescripcion + anchoPrecio - 11 - totalParaLlevar.toFixed(2).length)}$${totalParaLlevar.toFixed(2)}` + lineFeed
+          : `PARA LLEVAR:${' '.repeat(anchoDescripcion + anchoPrecio - 11 - totalParaLlevar.toFixed(2).length)}$${totalParaLlevar.toFixed(2)}` + lineFeed) +
+        separator + lineFeed +
+        (isBluetoothEnabled
+          ? `TOTAL:${' '.repeat(anchoDescripcion + anchoPrecio - 5 - totalFormateado.length)}${totalFormateado}` + lineFeed
+          : `TOTAL:${' '.repeat(anchoDescripcion + anchoPrecio - 5 - totalFormateado.length)}${totalFormateado}` + lineFeed) +
+        separator + lineFeed +
+        centerText + removeAccents('MAS DETALLES DE LAS ORDENES EN') + lineFeed +
+        centerText + removeAccents('kokoro.ketxal.com') + lineFeed +
+        leftAlign + separator + lineFeed +
+        '\n'.repeat(isBluetoothEnabled ? 3 : 5) +
+        resetFormat;
+
+      // Usar solo Bluetooth
+      try {
+        await sendToBluetooth(ticketContent);
+        setIsPrintingDay(false);
+        showSuccess('Corte del día impreso correctamente');
+      } catch (error: any) {
+        setIsPrintingDay(false);
+        showError('Error al enviar a impresora Bluetooth: ' + (error.message || 'Error desconocido'));
+      }
+    } catch (error: any) {
+      console.error('Error al imprimir:', error);
+      setIsPrintingDay(false);
+      showError('Error en impresión: ' + (error.message || 'Error desconocido'));
+    }
   };
 
   const getCurrentOrders = () => {
@@ -119,20 +465,20 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({ navigation }) => {
   const handleMarkAsReady = async (orderId: number) => {
     try {
       await OrderLecrepeService.markOrderAsReady(orderId);
-      Alert.alert('Éxito', 'Orden marcada como lista');
+      showSuccess('Orden marcada como lista');
       loadOrders();
     } catch (error: any) {
-      Alert.alert('Error', 'No se pudo marcar la orden como lista');
+      showError('No se pudo marcar la orden como lista');
     }
   };
 
   const handleMarkAsDelivered = async (orderId: number) => {
     try {
       await OrderLecrepeService.markOrderAsDelivered(orderId);
-      Alert.alert('Éxito', 'Orden marcada como entregada');
+      showSuccess('Orden marcada como entregada');
       loadOrders();
     } catch (error: any) {
-      Alert.alert('Error', 'No se pudo marcar la orden como entregada');
+      showError('No se pudo marcar la orden como entregada');
     }
   };
 
@@ -148,10 +494,10 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({ navigation }) => {
           onPress: async () => {
             try {
               await OrderLecrepeService.cancelOrderLecrepe(orderId);
-              Alert.alert('Éxito', 'Orden cancelada');
+              showSuccess('Orden cancelada');
               loadOrders();
             } catch (error: any) {
-              Alert.alert('Error', 'No se pudo cancelar la orden');
+              showError('No se pudo cancelar la orden');
             }
           },
         },
@@ -201,7 +547,7 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({ navigation }) => {
 
   const handlePrintOrder = async () => {
     if (!selectedOrder) {
-      Alert.alert('Error', 'No hay orden seleccionada para imprimir');
+      showError('No hay orden seleccionada para imprimir');
       return;
     }
 
@@ -217,13 +563,13 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({ navigation }) => {
 
       // Verificar configuración
       if (!isBluetoothEnabled && (!printerIP || !printerPort)) {
-        Alert.alert('Error', 'Por favor configura la impresora en Configuración');
+        showError('Por favor configura la impresora en Configuración');
         setIsPrinting(false);
         return;
       }
 
       if (isBluetoothEnabled && !bluetoothDevice) {
-        Alert.alert('Error', 'Por favor conecta un dispositivo Bluetooth en Configuración');
+        showError('Por favor conecta un dispositivo Bluetooth en Configuración');
         setIsPrinting(false);
         return;
       }
@@ -374,10 +720,10 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({ navigation }) => {
         try {
           await sendToBluetooth(ticketContent);
           setIsPrinting(false);
-          Alert.alert('Éxito', `Orden #${selectedOrder.id_order || 0} enviada a impresora Bluetooth`);
+          showSuccess(`Orden #${selectedOrder.id_order || 0} enviada a impresora Bluetooth`);
         } catch (error: any) {
           setIsPrinting(false);
-          Alert.alert('Error', 'Error al enviar a impresora Bluetooth: ' + (error.message || 'Error desconocido'));
+          showError('Error al enviar a impresora Bluetooth: ' + (error.message || 'Error desconocido'));
         }
       } else {
         const client = TcpSocket.createConnection(
@@ -394,12 +740,12 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({ navigation }) => {
               setTimeout(() => {
                 client.destroy();
                 setIsPrinting(false);
-                Alert.alert('Éxito', `Orden #${selectedOrder.id_order || 0} enviada a impresora`);
+                showSuccess(`Orden #${selectedOrder.id_order || 0} enviada a impresora`);
               }, 500);
             } catch (error: any) {
               client.destroy();
               setIsPrinting(false);
-              Alert.alert('Error', 'Error al enviar datos: ' + error.message);
+              showError('Error al enviar datos: ' + error.message);
             }
           }
         );
@@ -407,10 +753,7 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({ navigation }) => {
         client.on('error', (error: any) => {
           client.destroy();
           setIsPrinting(false);
-          Alert.alert(
-            'Error de conexión',
-            'No se pudo conectar a la impresora.\n\nVerifica:\n- IP correcta: ' + printerIP + '\n- Puerto: ' + printerPort + '\n- Que la tablet esté en la misma red WiFi'
-          );
+          showError(`No se pudo conectar a la impresora. Verifica IP: ${printerIP}, Puerto: ${printerPort} y que la tablet esté en la misma red WiFi`);
         });
 
         client.on('close', () => {
@@ -421,13 +764,13 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({ navigation }) => {
           if (client && !client.destroyed) {
             client.destroy();
             setIsPrinting(false);
-            Alert.alert('Timeout', 'La impresora no respondió. Verifica la conexión.');
+            showError('La impresora no respondió. Verifica la conexión.');
           }
         }, 10000);
       }
     } catch (error: any) {
       setIsPrinting(false);
-      Alert.alert('Error', 'Error al imprimir: ' + (error.message || 'Error desconocido'));
+      showError('Error al imprimir: ' + (error.message || 'Error desconocido'));
     }
   };
 
@@ -635,6 +978,46 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({ navigation }) => {
           </View>
         )}
       </ScrollView>
+
+      {/* Cierre del Día Button - Floating Button */}
+      <TouchableOpacity
+        style={[styles.closeDayFloatingButton, (loading || isClosingDay) && styles.closeDayButtonDisabled]}
+        onPress={handleCloseDay}
+        disabled={loading || isClosingDay}
+        activeOpacity={0.8}
+      >
+        {isClosingDay ? (
+          <>
+            <ActivityIndicator size="small" color="#fff" style={{ marginRight: 4 }} />
+            <Text style={styles.closeDayButtonText}>CERRANDO...</Text>
+          </>
+        ) : (
+          <>
+            <Text style={styles.closeDayIcon}>🔒</Text>
+            <Text style={styles.closeDayButtonText}>CIERRE DEL DÍA</Text>
+          </>
+        )}
+      </TouchableOpacity>
+
+      {/* Imprimir Cierre Button - Floating Button Right */}
+      <TouchableOpacity
+        style={[styles.printDayFloatingButton, (loading || isPrintingDay) && styles.printDayButtonDisabled]}
+        onPress={handlePrintDay}
+        disabled={loading || isPrintingDay}
+        activeOpacity={0.8}
+      >
+        {isPrintingDay ? (
+          <>
+            <ActivityIndicator size="small" color="#fff" style={{ marginRight: 4 }} />
+            <Text style={styles.printDayButtonText}>IMPRIMIENDO...</Text>
+          </>
+        ) : (
+          <>
+            <Text style={styles.printDayIcon}>🖨️</Text>
+            <Text style={styles.printDayButtonText}>IMPRIMIR CIERRE</Text>
+          </>
+        )}
+      </TouchableOpacity>
 
       {/* Order Detail Modal - Full Screen */}
       <Modal
@@ -849,6 +1232,7 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({ navigation }) => {
           </View>
         </SafeAreaView>
       </Modal>
+      <ToastComponent />
     </SafeAreaView>
   );
 };
@@ -923,6 +1307,70 @@ const styles = StyleSheet.create({
   trashIcon: {
     fontSize: 24,
     marginLeft: 8,
+  },
+  closeDayFloatingButton: {
+    position: 'absolute',
+    bottom: 20,
+    left: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#d32f2f',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    minWidth: 140,
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    zIndex: 1000,
+  },
+  printDayFloatingButton: {
+    position: 'absolute',
+    bottom: 20,
+    right: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FF9800',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    minWidth: 140,
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    zIndex: 1000,
+  },
+  printDayButtonDisabled: {
+    backgroundColor: '#ccc',
+    opacity: 0.6,
+  },
+  printDayIcon: {
+    fontSize: 14,
+    marginRight: 4,
+  },
+  printDayButtonText: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  closeDayButtonDisabled: {
+    backgroundColor: '#ccc',
+    opacity: 0.6,
+  },
+  closeDayIcon: {
+    fontSize: 14,
+    marginRight: 4,
+  },
+  closeDayButtonText: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: '#fff',
   },
   tabsContainer: {
     backgroundColor: '#fff',

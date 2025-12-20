@@ -242,5 +242,34 @@ export class OrderLecrepeService {
       throw error;
     }
   }
+
+  /**
+   * Reset order counter for a store (reinicia el contador de órdenes a 1)
+   */
+  static async resetOrderCounter(storeId: string | number): Promise<ApiResponse<any>> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/order_lecrepe/reset-counter/${storeId}`, {
+        method: 'PUT',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Error ${response.status}: ${errorText}`);
+      }
+
+      const data = await response.json();
+      return {
+        data,
+        success: true,
+      };
+    } catch (error: any) {
+      console.error('Error resetting order counter:', error);
+      throw error;
+    }
+  }
 }
 

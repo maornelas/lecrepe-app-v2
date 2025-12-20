@@ -57,11 +57,13 @@ const MesasScreen: React.FC<MesasScreenProps> = ({ navigation }) => {
       const ordersResponse = await OrderLecrepeService.getAllOrdersLecrepe(parseInt(idStore));
       const ordersData = ordersResponse.data || [];
 
-      // Filtrar órdenes activas (no cerradas, entregadas o canceladas)
+      // Filtrar órdenes activas (no cerradas, entregadas, canceladas o finalizadas)
+      // Las órdenes cerradas, entregadas, canceladas o finalizadas liberan la mesa automáticamente
       const activeOrders = ordersData.filter((o) => 
         o.status !== 'Cerrada' && 
         o.status !== 'Entregada' && 
-        o.status !== 'Cancelada'
+        o.status !== 'Cancelada' &&
+        o.status !== 'Finalizada'
       );
       
       // Add orders to tables
@@ -400,12 +402,6 @@ const MesasScreen: React.FC<MesasScreenProps> = ({ navigation }) => {
           <Text style={styles.backButtonText}>← Regresar</Text>
         </TouchableOpacity>
         <Text style={styles.title}>MESAS</Text>
-        <TouchableOpacity
-          style={styles.newOrderButton}
-          onPress={() => showInfo('Nueva Orden - Por implementar')}
-        >
-          <Text style={styles.newOrderButtonText}>+ Nueva</Text>
-        </TouchableOpacity>
       </View>
 
       {/* Croquis Layout */}
@@ -568,17 +564,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#333',
     flex: 1,
-  },
-  newOrderButton: {
-    backgroundColor: '#2196F3',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-  newOrderButtonText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: 'bold',
   },
   content: {
     flex: 1,

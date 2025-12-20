@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   SafeAreaView,
   View,
@@ -32,6 +32,13 @@ const OrdenesScreen: React.FC<OrdenesScreenProps> = ({ navigation }) => {
   const [refreshing, setRefreshing] = useState(false);
   const { showSuccess, showError, showInfo, showWarning, ToastComponent } = useToast();
 
+  // Memoizar tableInfo para evitar re-renders innecesarios
+  const newOrderTableInfo = useMemo(() => ({
+    mesa: 'PARA LLEVAR',
+    nombre: 'Cliente General',
+    orden: 0, // Valor fijo para evitar re-renders
+  }), []);
+
   useEffect(() => {
     loadOrders();
   }, []);
@@ -47,8 +54,10 @@ const OrdenesScreen: React.FC<OrdenesScreenProps> = ({ navigation }) => {
 
       const response = await OrderLecrepeService.getAllOrdersLecrepe(parseInt(idStore));
       if (response.data) {
-        // Filter only "to go" orders
-        const togoOrders = response.data.filter((order: Order) => order.togo === true);
+        // Filter only "to go" orders and exclude "Finalizadas"
+        const togoOrders = response.data.filter(
+          (order: Order) => order.togo === true && order.status !== 'Finalizada'
+        );
         setOrders(togoOrders);
       }
     } catch (error: any) {
@@ -139,9 +148,12 @@ const OrdenesScreen: React.FC<OrdenesScreenProps> = ({ navigation }) => {
     setIsOrderCreationOpen(true);
   };
 
-  const handleCloseOrderCreation = () => {
+  const handleCloseOrderCreation = (skipReload: boolean = false) => {
     setIsOrderCreationOpen(false);
-    loadOrders();
+    // Solo recargar si no se especifica skipReload (para cuando se cierra manualmente)
+    if (!skipReload) {
+      loadOrders();
+    }
   };
 
   const handleCloseOrderDetail = () => {
@@ -162,9 +174,21 @@ const OrdenesScreen: React.FC<OrdenesScreenProps> = ({ navigation }) => {
   };
 
   const handleOrderCreated = async (orderData: Partial<Order>) => {
-    // Esta función se llama después de crear una nueva orden
-    // Recargar las órdenes para mostrar la nueva
-    loadOrders();
+    try {
+      // Cerrar el modal inmediatamente para evitar parpadeo
+      setIsOrderCreationOpen(false);
+      // Mostrar toast de éxito
+      showSuccess('Orden creada exitosamente');
+      // Recargar las órdenes para mostrar la nueva (sin await para no bloquear)
+      loadOrders().catch((error) => {
+        console.error('Error reloading orders:', error);
+      });
+    } catch (error: any) {
+      console.error('Error handling order creation:', error);
+      showError('No se pudo crear la orden');
+      // Asegurar que el modal se cierre incluso si hay error
+      setIsOrderCreationOpen(false);
+    }
   };
 
   const handleRegresar = () => {
@@ -400,9 +424,9 @@ const OrdenesScreen: React.FC<OrdenesScreenProps> = ({ navigation }) => {
                   <Text style={styles.orderTotal}>
                     ${getTotalAmount(order).toFixed(2)}
                   </Text>
-                  {order.comments && (
+                  {(order as any).comments && (
                     <Text style={styles.orderComments} numberOfLines={1}>
-                      {order.comments}
+                      {(order as any).comments}
                     </Text>
                   )}
                 </View>
@@ -497,11 +521,7 @@ const OrdenesScreen: React.FC<OrdenesScreenProps> = ({ navigation }) => {
       <OrderCreation
         isOpen={isOrderCreationOpen}
         onClose={handleCloseOrderCreation}
-        tableInfo={{
-          mesa: 'PARA LLEVAR',
-          nombre: 'Cliente General',
-          orden: Math.floor(Math.random() * 1000) + 100,
-        }}
+        tableInfo={newOrderTableInfo}
         isTakeout={true}
         onSave={handleOrderCreated}
       />

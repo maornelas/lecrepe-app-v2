@@ -122,6 +122,35 @@ export class OrderService {
       throw error;
     }
   }
+
+  /**
+   * Print day close ticket (imprimir corte del día)
+   */
+  static async printDay(): Promise<ApiResponse<any>> {
+    try {
+      const response = await fetch(API_ENDPOINTS.PRINT_DAY, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Error ${response.status}: ${errorText}`);
+      }
+
+      const data = await response.json();
+      return {
+        data,
+        success: true,
+      };
+    } catch (error: any) {
+      console.error('Error printing day close:', error);
+      throw error;
+    }
+  }
 }
 
 

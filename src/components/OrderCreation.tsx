@@ -93,7 +93,8 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
   const [drinkOptionsModal, setDrinkOptionsModal] = useState<{
     open: boolean;
     drink: Product | null;
-  }>({ open: false, drink: null });
+    editingItem?: OrderItem | null;
+  }>({ open: false, drink: null, editingItem: null });
   const [selectedPriceOption, setSelectedPriceOption] = useState('');
   const [withPearls, setWithPearls] = useState(false);
   const [deslactosado, setDeslactosado] = useState(false);
@@ -137,7 +138,8 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
     } else {
       setIsCartExpanded(false);
     }
-  }, [isOpen, isEditMode, editingOrder, isTakeout, tableInfo]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, isEditMode, editingOrder, isTakeout]);
   
   useEffect(() => {
     // Actualizar subcategoría cuando cambian los datos
@@ -355,6 +357,16 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
                 itemPrice += calculatedFeeTogo;
               }
               
+              // Si es una bebida con perlas, agregar el precio de las perlas
+              if (foundProduct && (itemType === 'bebida' || itemType === 'bebidas')) {
+                const hasPearls = (item as any).withPearls === true || 
+                                  (itemName.toLowerCase().includes('con perlas') || 
+                                   (item.product_name || '').toLowerCase().includes('con perlas'));
+                if (hasPearls && foundProduct.pricePerlas) {
+                  itemPrice += foundProduct.pricePerlas;
+                }
+              }
+              
               // Identificar ingredientes adicionales (toppings marcados con additional: true o selected: true)
               // NO cargar ingredientes esenciales seleccionados (ya no se guardan como toppings)
               const productIngredients = foundProduct.ingredients && Array.isArray(foundProduct.ingredients)
@@ -395,6 +407,11 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
               const wasSinAzucar = commentsLower.includes('sin azúcar') || commentsLower.includes('sin azucar');
               const wasSinCremaBatida = commentsLower.includes('sin crema batida');
               
+              // Verificar si el item tiene perlas
+              const wasWithPearls = (item as any).withPearls === true || 
+                                    itemName.toLowerCase().includes('con perlas') ||
+                                    (item.product_name || '').toLowerCase().includes('con perlas');
+              
               // Verificar si el item es para llevar individualmente (en órdenes de mesa)
               const wasItemTakeout = (item as any).item_togo === true || 
                                      (commentsLower.includes('para llevar') && !isTakeout);
@@ -402,7 +419,7 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
           return {
             id: item._id || `item_${index}`,
             name: item.product_name || item.name || '',
-            price: itemPrice, // Ya incluye fee_togo si aplica
+            price: itemPrice, // Ya incluye fee_togo y perlas si aplica
                 quantity: (item.units && item.units > 0) ? item.units : 1,
             category: item.type || 'crepa',
             option: item.size || 'Regular',
@@ -416,6 +433,7 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
                 deslactosado: wasDeslactosado,
                 sinAzucar: wasSinAzucar,
                 sinCremaBatida: wasSinCremaBatida,
+                withPearls: wasWithPearls,
                 comments: comments,
               };
           } else {
@@ -445,6 +463,10 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
             const wasSinAzucar = commentsLower.includes('sin azúcar') || commentsLower.includes('sin azucar');
             const wasSinCremaBatida = commentsLower.includes('sin crema batida');
             
+            // Verificar si el item tiene perlas
+            const wasWithPearls = (item as any).withPearls === true || 
+                                  (item.product_name || item.name || '').toLowerCase().includes('con perlas');
+            
             // Verificar si el item es para llevar individualmente (en órdenes de mesa)
             const wasItemTakeout = (item as any).item_togo === true || 
                                    (commentsLower.includes('para llevar') && !isTakeout);
@@ -465,6 +487,7 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
               deslactosado: wasDeslactosado,
               sinAzucar: wasSinAzucar,
               sinCremaBatida: wasSinCremaBatida,
+              withPearls: wasWithPearls,
               comments: comments,
             };
           }
@@ -496,6 +519,33 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
           const wasSinAzucar = commentsLower.includes('sin azúcar') || commentsLower.includes('sin azucar');
           const wasSinCremaBatida = commentsLower.includes('sin crema batida');
           
+          // Verificar si el item tiene perlas
+          const wasWithPearls = (item as any).withPearls === true || 
+                                (item.product_name || item.name || '').toLowerCase().includes('con perlas');
+          
+          // Si es una bebida con perlas y el precio no las incluye, agregar el precio de las perlas
+          if (itemType === 'bebida' || itemType === 'bebidas') {
+            const allProducts = Object.values(bebidasDataFinal).flat();
+            const foundProduct = allProducts.find((p: any) => {
+              const productName = p.name || '';
+              const normalizedItemName = (item.product_name || item.name || '').toLowerCase().trim();
+              const normalizedProductName = productName.toLowerCase().trim();
+              return normalizedItemName === normalizedProductName ||
+                     normalizedItemName.includes(normalizedProductName) ||
+                     normalizedProductName.includes(normalizedItemName);
+            });
+            if (wasWithPearls && foundProduct && foundProduct.pricePerlas && itemPrice > 0) {
+              // Solo agregar si el precio no parece ya incluir las perlas
+              // Si el precio es exactamente el precio base + perlas, no duplicar
+              const basePrice = foundProduct.basePrice || foundProduct.price || 0;
+              const priceWithPearls = basePrice + (foundProduct.pricePerlas || 0);
+              // Si el precio actual es menor que el precio con perlas, agregar las perlas
+              if (itemPrice < priceWithPearls) {
+                itemPrice += foundProduct.pricePerlas;
+              }
+            }
+          }
+          
           // Verificar si el item es para llevar individualmente (en órdenes de mesa)
           const wasItemTakeout = (item as any).item_togo === true || 
                                  (commentsLower.includes('para llevar') && !isTakeout);
@@ -513,12 +563,13 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
             takeoutFee: calculatedFeeTogo,
             fee_togo: calculatedFeeTogo,
             itemTakeout: wasItemTakeout, // Cargar estado de "para llevar" individual
-            deslactosado: wasDeslactosado,
-            sinAzucar: wasSinAzucar,
-            sinCremaBatida: wasSinCremaBatida,
-            comments: comments,
-          };
-        }
+              deslactosado: wasDeslactosado,
+              sinAzucar: wasSinAzucar,
+              sinCremaBatida: wasSinCremaBatida,
+              withPearls: wasWithPearls,
+              comments: comments,
+            };
+          }
         }
       );
       setOrderItems(items);
@@ -601,7 +652,7 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
   const addItemToOrder = (item: any) => {
     if (activeTab === 1) {
       // Bebidas - abrir modal de opciones
-      setDrinkOptionsModal({ open: true, drink: item });
+      setDrinkOptionsModal({ open: true, drink: item, editingItem: null });
       setSelectedPriceOption('');
       setWithPearls(false);
     } else {
@@ -641,6 +692,55 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
     return name.includes('frappé') || name.includes('frappe') || name.includes('smoothie');
   };
 
+  const handleDrinkItemClick = (item: OrderItem) => {
+    if (readOnly) return;
+    
+    // Solo permitir para bebidas
+    if (item.category !== 'bebida') return;
+
+    // Buscar el producto original
+    let originalProduct: Product | null = null;
+
+    // Si el item ya tiene originalProduct, usarlo directamente
+    if (item.originalProduct) {
+      originalProduct = item.originalProduct;
+    } else {
+      // Buscar por ID en los productos cargados
+      const baseId = item.id.split('_')[0];
+      originalProduct = products.find(p => p._id === baseId) || null;
+
+      // Si no se encuentra por ID, buscar por nombre
+      if (!originalProduct && item.name) {
+        const itemNameWithoutOptions = item.name.split(' - ')[0]; // Remover " - Grande con Perlas"
+        originalProduct = products.find(p => 
+          p.name && 
+          p.name.toLowerCase().trim() === itemNameWithoutOptions.toLowerCase().trim() && 
+          (p.type === 'bebida' || p.type === 'bebidas')
+        ) || null;
+      }
+    }
+
+    if (originalProduct) {
+      // Extraer la opción de precio del nombre del item (ej: "FRAPPÉ CAJETA FRESA - Grande con Perlas" -> "Grande")
+      const nameParts = item.name.split(' - ');
+      const optionPart = nameParts.length > 1 ? nameParts[1].replace(' con Perlas', '').trim() : '';
+      
+      // Abrir modal con los valores actuales del item
+      setDrinkOptionsModal({ 
+        open: true, 
+        drink: originalProduct, 
+        editingItem: item 
+      });
+      
+      // Establecer los valores actuales del item
+      setSelectedPriceOption(item.option || optionPart || '');
+      setWithPearls(item.withPearls || false);
+      setDeslactosado(item.deslactosado || false);
+      setSinAzucar(item.sinAzucar || false);
+      setSinCremaBatida(item.sinCremaBatida || false);
+    }
+  };
+
   const handleDrinkOptionsConfirm = () => {
     if (!drinkOptionsModal.drink || !selectedPriceOption) return;
 
@@ -650,8 +750,10 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
     );
     let finalPrice = selectedOption?.price || drink.basePrice || 0;
 
-    if (withPearls && drink.pricePerlas) {
-      finalPrice += drink.pricePerlas;
+    // Agregar precio de perlas si está seleccionado (usar 5 como valor por defecto si no está definido)
+    if (withPearls) {
+      const pearlsPrice = drink.pricePerlas || 5;
+      finalPrice += pearlsPrice;
     }
 
     // Construir array de opciones adicionales para frappés
@@ -682,10 +784,23 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
       sinAzucar: sinAzucar,
       sinCremaBatida: sinCremaBatida,
       comments: comments,
+      originalProduct: drink,
     };
 
-    setOrderItems((prev) => [...prev, newItem]);
-    setDrinkOptionsModal({ open: false, drink: null });
+    // Si estamos editando un item existente, actualizarlo en lugar de agregar uno nuevo
+    if (drinkOptionsModal.editingItem) {
+      setOrderItems((prev) =>
+        prev.map((item) =>
+          item.id === drinkOptionsModal.editingItem!.id
+            ? { ...newItem, quantity: item.quantity } // Mantener la cantidad original
+            : item
+        )
+      );
+    } else {
+      setOrderItems((prev) => [...prev, newItem]);
+    }
+
+    setDrinkOptionsModal({ open: false, drink: null, editingItem: null });
     setSelectedPriceOption('');
     setWithPearls(false);
     setDeslactosado(false);
@@ -912,14 +1027,15 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
           // Si onSave está definido (desde MesasScreen u OrdenesScreen), delegar el manejo completo
           if (onSave) {
             const createdOrder = response.data || {};
+            // Limpiar la orden antes de llamar a onSave para evitar parpadeos
+            resetOrder();
+            // Llamar a onSave después de resetear (onSave maneja el toast y el cierre del modal)
             await onSave({
               ...createdOrder,
               id_order: createdOrder.id_order || createdOrder._id || (createdOrder as any).id,
               total: createdOrder.total || finalTotal,
               status: createdOrder.status || 'Pendiente',
             } as Partial<Order>);
-            // onSave ya maneja el toast y el cierre del modal, solo limpiar la orden
-            resetOrder();
           } else {
             // Si no hay onSave (modo standalone), mostrar toast y cerrar modal
             showSuccess('Orden creada exitosamente');
@@ -1910,13 +2026,20 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
                     <View style={styles.orderItemHeader}>
                       <TouchableOpacity
                         style={{ flex: 1 }}
-                        onPress={() => !readOnly && item.category === 'crepa' && handleCrepeItemClick(item)}
-                        disabled={readOnly || item.category !== 'crepa'}
+                        onPress={() => {
+                          if (readOnly) return;
+                          if (item.category === 'crepa') {
+                            handleCrepeItemClick(item);
+                          } else if (item.category === 'bebida') {
+                            handleDrinkItemClick(item);
+                          }
+                        }}
+                        disabled={readOnly || (item.category !== 'crepa' && item.category !== 'bebida')}
                       >
                         <Text 
                           style={[
                             styles.orderItemName,
-                            !readOnly && item.category === 'crepa' && styles.orderItemNameClickable,
+                            !readOnly && (item.category === 'crepa' || item.category === 'bebida') && styles.orderItemNameClickable,
                           ]} 
                           numberOfLines={2}
                         >
@@ -2049,7 +2172,7 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
           animationType="fade"
           presentationStyle="overFullScreen"
           onRequestClose={() =>
-            setDrinkOptionsModal({ open: false, drink: null })
+            setDrinkOptionsModal({ open: false, drink: null, editingItem: null })
           }
         >
           <View style={styles.drinkModalOverlay}>
@@ -2186,9 +2309,9 @@ const OrderCreation: React.FC<OrderCreationProps> = ({
                 <TouchableOpacity
                   style={styles.modalCancelButton}
                   onPress={() => {
-                    setDrinkOptionsModal({ open: false, drink: null });
-                    setSelectedPriceOption('');
-                    setWithPearls(false);
+    setDrinkOptionsModal({ open: false, drink: null, editingItem: null });
+    setSelectedPriceOption('');
+    setWithPearls(false);
                     setDeslactosado(false);
                     setSinAzucar(false);
                     setSinCremaBatida(false);

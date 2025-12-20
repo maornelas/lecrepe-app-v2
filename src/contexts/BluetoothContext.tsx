@@ -7,19 +7,15 @@ import type { BluetoothDevice } from '../services/lecrepeBluetoothService';
 // Use native module instead of react-native-bluetooth-classic
 const { LecrepeBluetooth } = NativeModules;
 
-// Importación dinámica del módulo de Bluetooth para evitar inicialización inmediata
+// Importación del módulo de Bluetooth usando require para compatibilidad con release
 let RNBluetoothClassic: any = null;
-let RNBluetoothDeviceClass: any = null;
 
 // Función helper para obtener el módulo de Bluetooth de forma segura
-const getBluetoothModule = async () => {
+const getBluetoothModule = () => {
   if (RNBluetoothClassic === null) {
     try {
-      const bluetoothModule = await import('react-native-bluetooth-classic');
-      RNBluetoothClassic = bluetoothModule.default;
-      // BluetoothDevice es solo un tipo, no un valor exportado
-      // Los dispositivos se obtienen a través de los métodos del módulo
-      RNBluetoothDeviceClass = null;
+      const bluetoothModule = require('react-native-bluetooth-classic');
+      RNBluetoothClassic = bluetoothModule.default || bluetoothModule;
       
       // Verificar que el módulo se cargó correctamente
       if (!RNBluetoothClassic) {
@@ -36,10 +32,9 @@ const getBluetoothModule = async () => {
           throw new Error('Bluetooth no está disponible en este dispositivo');
         },
       };
-      RNBluetoothDeviceClass = null;
     }
   }
-  return { RNBluetoothClassic, BluetoothDevice: RNBluetoothDeviceClass };
+  return RNBluetoothClassic;
 };
 
 interface BluetoothContextType {
@@ -75,7 +70,7 @@ export const BluetoothProvider: React.FC<{ children: ReactNode }> = ({ children 
   // Definir checkBluetooth antes del useEffect que lo usa
   const checkBluetooth = async () => {
     try {
-      const { RNBluetoothClassic } = await getBluetoothModule();
+      const RNBluetoothClassic = getBluetoothModule();
       // Verificar si el módulo está disponible (no es el mock)
       if (!RNBluetoothClassic || typeof RNBluetoothClassic.isBluetoothEnabled !== 'function') {
         console.warn('Bluetooth module not available');
@@ -103,10 +98,9 @@ export const BluetoothProvider: React.FC<{ children: ReactNode }> = ({ children 
         }
       }
     } catch (error: any) {
-      console.error('Bluetooth check failed:', error?.message || error);
-      // En simulador o si Bluetooth no está disponible, deshabilitar
+      const detailed = getErrorDetails(error, 'checkBluetooth');
+      console.error('Bluetooth check failed:', detailed, { stack: error?.stack });
       setBluetoothAvailable(false);
-      // No lanzar error, solo deshabilitar la funcionalidad
     }
   };
 
@@ -177,7 +171,7 @@ export const BluetoothProvider: React.FC<{ children: ReactNode }> = ({ children 
         throw new Error('Se necesitan permisos de Bluetooth para escanear dispositivos. Por favor, otorga los permisos en la configuración de la aplicación.');
       }
 
-      const { RNBluetoothClassic } = await getBluetoothModule();
+      const RNBluetoothClassic = getBluetoothModule();
       
       // Verificar que el módulo esté disponible
       if (!RNBluetoothClassic || typeof RNBluetoothClassic.isBluetoothEnabled !== 'function') {
@@ -193,17 +187,21 @@ export const BluetoothProvider: React.FC<{ children: ReactNode }> = ({ children 
       // Escanear dispositivos
       const devices = await RNBluetoothClassic.getBondedDevices();
       setBluetoothDevices(devices);
-      
+
       if (devices.length === 0) {
+        // Provide an informative error message including the devices we got (if any)
         throw new Error('No se encontraron dispositivos Bluetooth emparejados. Por favor empareja tu impresora primero en la configuración de Bluetooth del dispositivo.');
       }
     } catch (error: any) {
-      console.error('Bluetooth scan error:', error);
-      // Asegurarse de limpiar el estado
+      const detailed = getErrorDetails(error, 'scanBluetoothDevices');
+      console.error('Bluetooth scan error:', detailed, { original: error });
       setBluetoothDevices([]);
-      // Lanzar error con mensaje descriptivo
-      const errorMessage = error?.message || 'Error desconocido al escanear dispositivos Bluetooth';
-      throw new Error(errorMessage);
+      const errorMessage = detailed.message || 'Error desconocido al escanear dispositivos Bluetooth';
+      // Re-throw an error with more context so UIs/consumers can show it
+      const errToThrow: any = new Error(errorMessage);
+      errToThrow.status = detailed.status;
+      errToThrow.responseBody = detailed.responseBody;
+      throw errToThrow;
     } finally {
       setIsScanning(false);
     }
@@ -230,7 +228,7 @@ export const BluetoothProvider: React.FC<{ children: ReactNode }> = ({ children 
         }
       }
 
-      const { RNBluetoothClassic } = await getBluetoothModule();
+      const RNBluetoothClassic = getBluetoothModule();
       
       // Verificar que Bluetooth esté habilitado
       const isEnabled = await LecrepeBluetoothService.isBluetoothAvailable();
@@ -240,7 +238,7 @@ export const BluetoothProvider: React.FC<{ children: ReactNode }> = ({ children 
 
       // Conectar usando el servicio nativo
       const connected = await LecrepeBluetoothService.connectToDevice(device);
-      
+
       if (connected) {
         // Guardar el dispositivo
         setBluetoothDevice(device);
@@ -260,12 +258,14 @@ export const BluetoothProvider: React.FC<{ children: ReactNode }> = ({ children 
         throw new Error('No se pudo establecer la conexión. El dispositivo puede estar apagado o fuera de alcance.');
       }
     } catch (error: any) {
-      console.error('Bluetooth connect error:', error);
-      // Asegurarse de limpiar el estado de conexión
+      const detailed = getErrorDetails(error, 'connectBluetoothDevice');
+      console.error('Bluetooth connect error:', detailed, { device, original: error });
       setIsConnecting(null);
-      // Lanzar error con mensaje descriptivo
-      const errorMessage = error?.message || 'Error desconocido al conectar al dispositivo Bluetooth';
-      throw new Error(errorMessage);
+      const errorMessage = detailed.message || 'Error desconocido al conectar al dispositivo Bluetooth';
+      const errToThrow: any = new Error(errorMessage);
+      errToThrow.status = detailed.status;
+      errToThrow.responseBody = detailed.responseBody;
+      throw errToThrow;
     } finally {
       setIsConnecting(null);
     }
@@ -274,17 +274,17 @@ export const BluetoothProvider: React.FC<{ children: ReactNode }> = ({ children 
   const disconnectBluetoothDevice = async () => {
     try {
       await LecrepeBluetoothService.disconnect();
-      
-      // Limpiar storage
       await StorageService.setItem('bluetoothDeviceAddress', '');
-      
       setBluetoothDevice(null);
       setUseBluetooth(false);
     } catch (error: any) {
-      console.error('Error disconnecting:', error);
+      const detailed = getErrorDetails(error, 'disconnectBluetoothDevice');
+      console.error('Error disconnecting:', detailed, { original: error });
       setBluetoothDevice(null);
       setUseBluetooth(false);
-      throw error;
+      const errToThrow: any = new Error(detailed.message || 'Error al desconectar');
+      errToThrow.status = detailed.status;
+      throw errToThrow;
     }
   };
 
@@ -294,17 +294,16 @@ export const BluetoothProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
 
     try {
-      // Verificar conexión
-      const isConnected = await LecrepeBluetoothService.isConnected();
-      if (!isConnected) {
-        throw new Error('Dispositivo Bluetooth desconectado');
-      }
-
-      // Enviar datos usando el servicio nativo
+      // Intentar enviar directamente - el método sendData ya maneja la verificación de conexión
+      // y los errores de manera más robusta
       await LecrepeBluetoothService.sendData(content);
     } catch (error: any) {
-      console.error('Error sending to Bluetooth:', error);
-      throw error;
+      const detailed = getErrorDetails(error, 'sendToBluetooth');
+      console.error('Error sending to Bluetooth:', detailed, { content, device: bluetoothDevice, original: error });
+      const errToThrow: any = new Error(detailed.message || 'Error al enviar datos por Bluetooth');
+      errToThrow.status = detailed.status;
+      errToThrow.responseBody = detailed.responseBody;
+      throw errToThrow;
     }
   };
 
@@ -340,4 +339,67 @@ export const useBluetooth = (): BluetoothContextType => {
     throw new Error('useBluetooth must be used within a BluetoothProvider');
   }
   return context;
+};
+
+// New: helper types & forward helper for detailed errors
+type AnyError = any;
+interface DetailedError extends Error {
+  status?: number | string;
+  code?: string;
+  responseBody?: any;
+  originalError?: AnyError;
+}
+
+const getErrorDetails = (err: AnyError, context?: string): DetailedError => {
+  const detailed: DetailedError = new Error(err?.message || String(err || 'Unknown error'));
+  detailed.originalError = err;
+
+  // Try to extract common fields from fetch/axios/native errors
+  if (err?.status || err?.statusCode) {
+    detailed.status = err.status || err.statusCode;
+  } else if (err?.response?.status) {
+    detailed.status = err.response.status;
+  }
+
+  if (err?.code) {
+    detailed.code = err.code;
+  }
+
+  if (err?.response?.data) {
+    detailed.responseBody = err.response.data;
+  } else if (err?.body) {
+    detailed.responseBody = err.body;
+  } else if (err?.message) {
+    // sometimes server returns JSON string in message
+    try {
+      const parsed = JSON.parse(err.message);
+      detailed.responseBody = parsed;
+    } catch {
+      // ignore
+    }
+  }
+
+  // Add context prefix to message to make it clearer in logs
+  if (context) {
+    detailed.message = `${context}: ${detailed.message}`;
+  }
+
+  return detailed;
+};
+
+// Exported util so other UI components (eg KitchenScreen) can format the error nicely
+export const formatErrorForUI = (err: AnyError, context?: string): string => {
+  const d = getErrorDetails(err, context);
+  let msg = d.message || 'Error desconocido';
+  if (d.status) msg += ` (status: ${d.status})`;
+  if (d.code) msg += ` (code: ${d.code})`;
+  if (d.responseBody) {
+    try {
+      const pretty = typeof d.responseBody === 'string' ? d.responseBody : JSON.stringify(d.responseBody);
+      msg += ` response: ${pretty}`;
+    } catch {
+      // ignore
+    }
+  }
+  return msg;
 };

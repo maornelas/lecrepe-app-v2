@@ -12,25 +12,16 @@ import {
   Platform,
   PermissionsAndroid,
 } from 'react-native';
-import TcpSocket from 'react-native-tcp-socket';
 import NetInfo from '@react-native-community/netinfo';
 import { StorageService } from '../services/storageService';
 import { useBluetooth } from '../contexts/BluetoothContext';
-
-// Declaración de tipos para TextEncoder (disponible en React Native)
-declare const TextEncoder: {
-  new (): {
-    encode(input: string): Uint8Array;
-  };
-};
+import type { BluetoothDevice } from '../services/lecrepeBluetoothService';
 
 interface ConfigScreenProps {
   navigation?: any;
 }
 
 const ConfigScreen: React.FC<ConfigScreenProps> = ({ navigation }) => {
-  const [printerIP, setPrinterIP] = useState('192.168.1.26');
-  const [printerPort, setPrinterPort] = useState('9100');
   const [isPrinting, setIsPrinting] = useState(false);
   const [localIP, setLocalIP] = useState('Obteniendo...');
   
@@ -51,6 +42,8 @@ const ConfigScreen: React.FC<ConfigScreenProps> = ({ navigation }) => {
   } = useBluetooth();
 
   useEffect(() => {
+    // Forzar Bluetooth siempre activado
+    setUseBluetooth(true);
     loadSavedSettings();
     getLocalIP();
     // Verificar disponibilidad de Bluetooth al cargar la pantalla
@@ -63,25 +56,11 @@ const ConfigScreen: React.FC<ConfigScreenProps> = ({ navigation }) => {
 
   const loadSavedSettings = async () => {
     try {
-      const savedIP = await StorageService.getItem('printerIP');
-      const savedPort = await StorageService.getItem('printerPort');
-
-      if (savedIP) setPrinterIP(savedIP);
-      if (savedPort) setPrinterPort(savedPort);
       // El contexto de Bluetooth ya maneja la carga de configuración Bluetooth
+      // Forzar Bluetooth siempre activado
+      await StorageService.setItem('useBluetooth', 'true');
     } catch (error) {
       console.error('Error loading saved settings:', error);
-    }
-  };
-
-  const saveSettings = async () => {
-    try {
-      await StorageService.setItem('printerIP', printerIP);
-      await StorageService.setItem('printerPort', printerPort);
-      await StorageService.setItem('useBluetooth', isBluetoothEnabled.toString());
-      // BluetoothService already saves the device address when connecting
-    } catch (error) {
-      console.error('Error saving settings:', error);
     }
   };
 
@@ -156,12 +135,7 @@ const ConfigScreen: React.FC<ConfigScreenProps> = ({ navigation }) => {
   };
 
   const handleTestPrint = async () => {
-    if (!isBluetoothEnabled && (!printerIP || !printerPort)) {
-      Alert.alert('Error', 'Por favor configura la impresora (IP/Puerto o Bluetooth)');
-      return;
-    }
-    
-    if (isBluetoothEnabled && !bluetoothDevice) {
+    if (!bluetoothDevice) {
       Alert.alert('Error', 'Por favor conecta un dispositivo Bluetooth');
       return;
     }
@@ -196,9 +170,8 @@ const ConfigScreen: React.FC<ConfigScreenProps> = ({ navigation }) => {
         removeAccents('Tel: 432-100-4990') + lineFeed +
         leftAlign + '---------------------------------------------' + lineFeed +
         removeAccents('ESTA ES UNA IMPRESION DE PRUEBA') + lineFeed +
-        `IP: ${printerIP}` + lineFeed +
-        removeAccents('NOMBRE: XPRINTER 8MM') + lineFeed +
-        `PUERTO: ${printerPort}` + lineFeed +
+        removeAccents('NOMBRE: XPRINTER 58MM') + lineFeed +
+        removeAccents('CONEXION: BLUETOOTH') + lineFeed +
         `FECHA: ${removeAccents(currentDate)}` + lineFeed +
         '---------------------------------------------' + lineFeed +
         centerText + removeAccents('GRACIAS POR TU COMPRA') + lineFeed +
@@ -207,83 +180,22 @@ const ConfigScreen: React.FC<ConfigScreenProps> = ({ navigation }) => {
         '\n'.repeat(5) + // Menos espacios
         resetFormat;
 
-      // Usar Bluetooth o TCP según la configuración
-      if (isBluetoothEnabled && bluetoothDevice) {
-        sendBluetooth(testContent)
-          .then(() => {
-            setIsPrinting(false);
-            Alert.alert('Éxito', 'Impresión de prueba enviada correctamente a Bluetooth');
-          })
-          .catch((error: any) => {
-            setIsPrinting(false);
-            Alert.alert('Error', 'Error al enviar a impresora Bluetooth: ' + error.message);
-          });
-      } else {
-        const client = TcpSocket.createConnection(
-          {
-            host: printerIP,
-            port: parseInt(printerPort, 10),
-          },
-          () => {
-            try {
-              const encoder = new TextEncoder();
-              const uint8Array = encoder.encode(testContent);
-              client.write(uint8Array as any);
-            
-              setTimeout(() => {
-                client.destroy();
-                setIsPrinting(false);
-                Alert.alert('Éxito', 'Impresión de prueba enviada correctamente');
-              }, 500);
-            } catch (error: any) {
-              client.destroy();
-              setIsPrinting(false);
-              Alert.alert('Error', 'Error al enviar datos: ' + error.message);
-            }
-          }
-        );
-
-        client.on('error', (error: any) => {
-          client.destroy();
+      // Usar solo Bluetooth
+      sendBluetooth(testContent)
+        .then(() => {
           setIsPrinting(false);
-          Alert.alert(
-            'Error de conexión',
-            'No se pudo conectar a la impresora.\n\nVerifica:\n- IP correcta: ' + printerIP + '\n- Puerto: ' + printerPort + '\n- Que la tablet esté en la misma red WiFi'
-          );
-        });
-
-        client.on('close', () => {
+          Alert.alert('Éxito', 'Impresión de prueba enviada correctamente a Bluetooth');
+        })
+        .catch((error: any) => {
           setIsPrinting(false);
+          Alert.alert('Error', 'Error al enviar a impresora Bluetooth: ' + error.message);
         });
-
-        setTimeout(() => {
-          if (client && !client.destroyed) {
-            client.destroy();
-            setIsPrinting(false);
-            Alert.alert('Timeout', 'La impresora no respondió. Verifica la conexión.');
-          }
-        }, 10000);
-      }
     } catch (error: any) {
       setIsPrinting(false);
       Alert.alert('Error', 'Error al generar la impresión: ' + error.message);
     }
   };
 
-  const handleConnectionTypeChange = (useBT: boolean) => {
-    setUseBluetooth(useBT);
-    saveSettings();
-  };
-
-  const handleIPChange = (ip: string) => {
-    setPrinterIP(ip);
-    saveSettings();
-  };
-
-  const handlePortChange = (port: string) => {
-    setPrinterPort(port);
-    saveSettings();
-  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -299,124 +211,59 @@ const ConfigScreen: React.FC<ConfigScreenProps> = ({ navigation }) => {
 
       <ScrollView style={styles.settingsContainer}>
         <View style={styles.settingsSection}>
-          <Text style={styles.settingsSectionTitle}>Tipo de Conexión</Text>
-          <View style={styles.configRow}>
-            <TouchableOpacity
-              style={[
-                styles.connectionTypeButton,
-                !isBluetoothEnabled && styles.connectionTypeButtonActive,
-                styles.connectionTypeButtonDisabled,
-              ]}
-              onPress={() => {}} // Deshabilitado - no hacer nada
-              disabled={true}>
-              <Text style={[
-                styles.connectionTypeButtonText,
-                !isBluetoothEnabled && styles.connectionTypeButtonTextActive,
-                styles.connectionTypeButtonTextDisabled,
-              ]}>
-                WiFi (TCP)
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.connectionTypeButton,
-                isBluetoothEnabled && styles.connectionTypeButtonActive,
-              ]}
-              onPress={() => handleConnectionTypeChange(true)}>
-              <Text style={[
-                styles.connectionTypeButtonText,
-                isBluetoothEnabled && styles.connectionTypeButtonTextActive,
-              ]}>
-                Bluetooth
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {!isBluetoothEnabled ? (
-          <View style={styles.settingsSection}>
-            <Text style={styles.settingsSectionTitle}>Configuración de Impresora WiFi</Text>
-            <Text style={styles.infoLabel}>Formato: 80mm (automático con WiFi)</Text>
-            <View style={styles.configRow}>
-              <View style={[styles.configInput, {marginRight: 10}]}>
-                <Text style={styles.label}>IP de la Impresora</Text>
-                <TextInput
-                  style={styles.input}
-                  value={printerIP}
-                  onChangeText={handleIPChange}
-                  placeholder="192.168.1.26"
-                  keyboardType="numeric"
-                  autoCapitalize="none"
-                />
-              </View>
-              <View style={styles.configInput}>
-                <Text style={styles.label}>Puerto</Text>
-                <TextInput
-                  style={styles.input}
-                  value={printerPort}
-                  onChangeText={handlePortChange}
-                  placeholder="9100"
-                  keyboardType="numeric"
-                />
-              </View>
+          <Text style={styles.settingsSectionTitle}>Configuración de Impresora Bluetooth</Text>
+          {!bluetoothAvailable ? (
+            <View style={styles.infoCard}>
+              <Text style={styles.infoLabel}>Bluetooth no disponible</Text>
+              <Text style={styles.infoValue}>La funcionalidad Bluetooth no está disponible en este dispositivo o no se pudo inicializar correctamente.</Text>
             </View>
-          </View>
-        ) : (
-          <View style={styles.settingsSection}>
-            <Text style={styles.settingsSectionTitle}>Configuración de Impresora Bluetooth</Text>
-            {!bluetoothAvailable ? (
-              <View style={styles.infoCard}>
-                <Text style={styles.infoLabel}>Bluetooth no disponible</Text>
-                <Text style={styles.infoValue}>La funcionalidad Bluetooth no está disponible en este dispositivo o no se pudo inicializar correctamente.</Text>
-              </View>
-            ) : bluetoothDevice ? (
-              <View style={styles.infoCard}>
-                <Text style={styles.infoLabel}>Dispositivo Conectado</Text>
-                <Text style={styles.infoValue}>{bluetoothDevice.name || bluetoothDevice.address}</Text>
-                <TouchableOpacity
-                  style={styles.disconnectButton}
-                  onPress={handleDisconnectDevice}>
-                  <Text style={styles.disconnectButtonText}>Desconectar</Text>
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <>
-                <Text style={styles.infoLabel}>Formato: 58mm (automático con Bluetooth)</Text>
-                <TouchableOpacity
-                  style={[
-                    styles.scanButton,
-                    isScanning && styles.scanButtonDisabled,
-                  ]}
-                  onPress={handleScanDevices}
-                  disabled={isScanning}>
-                  {isScanning ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <Text style={styles.scanButtonText}>Escanear Dispositivos</Text>
-                  )}
-                </TouchableOpacity>
-                
-                {bluetoothDevices.length > 0 && (
-                  <View style={styles.devicesList}>
-                    {bluetoothDevices.map((device) => (
-                      <TouchableOpacity
-                        key={device.address}
-                        style={styles.deviceItem}
-                        onPress={() => handleConnectDevice(device)}
-                        disabled={isConnecting !== null}>
-                        <Text style={styles.deviceName}>{device.name || 'Dispositivo sin nombre'}</Text>
-                        <Text style={styles.deviceAddress}>{device.address}</Text>
-                        {isConnecting === device.address && (
-                          <ActivityIndicator size="small" color="#2196F3" style={{ marginTop: 5 }} />
-                        )}
-                      </TouchableOpacity>
-                    ))}
-                  </View>
+          ) : bluetoothDevice ? (
+            <View style={styles.infoCard}>
+              <Text style={styles.infoLabel}>Dispositivo Conectado</Text>
+              <Text style={styles.infoValue}>{bluetoothDevice.name || bluetoothDevice.address}</Text>
+              <TouchableOpacity
+                style={styles.disconnectButton}
+                onPress={handleDisconnectDevice}>
+                <Text style={styles.disconnectButtonText}>Desconectar</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <>
+              <Text style={styles.infoLabel}>Formato: 58mm (automático con Bluetooth)</Text>
+              <TouchableOpacity
+                style={[
+                  styles.scanButton,
+                  isScanning && styles.scanButtonDisabled,
+                ]}
+                onPress={handleScanDevices}
+                disabled={isScanning}>
+                {isScanning ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.scanButtonText}>Escanear Dispositivos</Text>
                 )}
-              </>
-            )}
-          </View>
-        )}
+              </TouchableOpacity>
+              
+              {bluetoothDevices.length > 0 && (
+                <View style={styles.devicesList}>
+                  {bluetoothDevices.map((device) => (
+                    <TouchableOpacity
+                      key={device.address}
+                      style={styles.deviceItem}
+                      onPress={() => handleConnectDevice(device)}
+                      disabled={isConnecting !== null}>
+                      <Text style={styles.deviceName}>{device.name || 'Dispositivo sin nombre'}</Text>
+                      <Text style={styles.deviceAddress}>{device.address}</Text>
+                      {isConnecting === device.address && (
+                        <ActivityIndicator size="small" color="#2196F3" style={{ marginTop: 5 }} />
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </>
+          )}
+        </View>
 
         <View style={styles.settingsSection}>
           <TouchableOpacity

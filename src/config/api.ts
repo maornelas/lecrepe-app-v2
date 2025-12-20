@@ -11,6 +11,7 @@ export const API_ENDPOINTS = {
   GET_CLOSED_ORDERS_BY_STORE: (id_store: string | number) => `${API_BASE_URL}/order/getClosed/store/${id_store}`,
   CREATE_ORDER: `${API_BASE_URL}/order/create/`,
   UPDATE_ORDER: (id: string | number) => `${API_BASE_URL}/order/update/${id}`,
+  PRINT_DAY: `${API_BASE_URL}/order/printDay`,
   
   // User endpoints
   LOGIN_USER: (nip: string, id_store: string | number) => `${API_BASE_URL}/member/login/${nip}/${id_store}`,
@@ -28,6 +29,7 @@ export const API_ENDPOINTS = {
   MARK_ORDER_DELIVERED: (id: string | number) => `${API_BASE_URL}/order_lecrepe/delivered/${id}`,
   CANCEL_ORDER_LECREPE: (id: string | number) => `${API_BASE_URL}/order_lecrepe/cancel/${id}`,
   DELETE_ORDER_LECREPE: (id: string | number) => `${API_BASE_URL}/order_lecrepe/delete/${id}`,
+  RESET_ORDER_COUNTER: (storeId: string | number) => `${API_BASE_URL}/order_lecrepe/reset-counter/${storeId}`,
   
   // Product endpoints
   GET_ALL_PRODUCTS: `${API_BASE_URL}/product/get`,
