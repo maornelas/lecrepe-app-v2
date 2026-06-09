@@ -7,6 +7,13 @@ set -e
 
 echo "🚀 Iniciando aplicación Android..."
 
+# Configurar Android SDK si existe en la ruta por defecto
+if [ -d "$HOME/Library/Android/sdk" ]; then
+  export ANDROID_HOME=$HOME/Library/Android/sdk
+  export PATH=$PATH:$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator
+fi
+[ -n "$ANDROID_HOME" ] && export PATH=$PATH:$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator
+
 # Ir al directorio del proyecto
 cd "$(dirname "$0")"
 

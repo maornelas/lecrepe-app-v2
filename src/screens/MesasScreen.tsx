@@ -57,13 +57,11 @@ const MesasScreen: React.FC<MesasScreenProps> = ({ navigation }) => {
       const ordersResponse = await OrderLecrepeService.getAllOrdersLecrepe(parseInt(idStore));
       const ordersData = ordersResponse.data || [];
 
-      // Filtrar órdenes activas (no cerradas, entregadas, canceladas o finalizadas)
-      // Las órdenes cerradas, entregadas, canceladas o finalizadas liberan la mesa automáticamente
+      // Filtrar órdenes activas (no cerradas, entregadas, canceladas). Finalizada ya no viene del API por tienda.
       const activeOrders = ordersData.filter((o) => 
         o.status !== 'Cerrada' && 
         o.status !== 'Entregada' && 
-        o.status !== 'Cancelada' &&
-        o.status !== 'Finalizada'
+        o.status !== 'Cancelada'
       );
       
       // Add orders to tables

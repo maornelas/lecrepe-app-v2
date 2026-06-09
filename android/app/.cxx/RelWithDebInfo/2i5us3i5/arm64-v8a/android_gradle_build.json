@@ -32,9 +32,9 @@
         "/Users/maornelas/Code/lecrepe/lecrepe-app-v2/android/app/build/intermediates/cxx/RelWithDebInfo/2i5us3i5/obj/arm64-v8a/libreact_codegen_safeareacontext.so",
         "/Users/maornelas/Code/lecrepe/lecrepe-app-v2/android/app/build/intermediates/cxx/RelWithDebInfo/2i5us3i5/obj/arm64-v8a/libreact_codegen_rnscreens.so",
         "/Users/maornelas/Code/lecrepe/lecrepe-app-v2/android/app/build/intermediates/cxx/RelWithDebInfo/2i5us3i5/obj/arm64-v8a/libreact_codegen_rnsvg.so",
-        "/Users/maornelas/.gradle/caches/8.13/transforms/066ab4ee048cd2b737a2cef809d0db8a/transformed/fbjni-0.7.0/prefab/modules/fbjni/libs/android.arm64-v8a/libfbjni.so",
-        "/Users/maornelas/.gradle/caches/8.13/transforms/b142e6f75603c774d9881af962aaafa7/transformed/react-android-0.82.1-release/prefab/modules/jsi/libs/android.arm64-v8a/libjsi.so",
-        "/Users/maornelas/.gradle/caches/8.13/transforms/b142e6f75603c774d9881af962aaafa7/transformed/react-android-0.82.1-release/prefab/modules/reactnative/libs/android.arm64-v8a/libreactnative.so"
+        "/private/var/folders/tt/79d7j_514gb5kf6gcyscq6580000gn/T/cursor-sandbox-cache/a4c31241669881e4d32aced494bbc7a6/gradle/caches/8.13/transforms/066ab4ee048cd2b737a2cef809d0db8a/transformed/fbjni-0.7.0/prefab/modules/fbjni/libs/android.arm64-v8a/libfbjni.so",
+        "/private/var/folders/tt/79d7j_514gb5kf6gcyscq6580000gn/T/cursor-sandbox-cache/a4c31241669881e4d32aced494bbc7a6/gradle/caches/8.13/transforms/b142e6f75603c774d9881af962aaafa7/transformed/react-android-0.82.1-release/prefab/modules/jsi/libs/android.arm64-v8a/libjsi.so",
+        "/private/var/folders/tt/79d7j_514gb5kf6gcyscq6580000gn/T/cursor-sandbox-cache/a4c31241669881e4d32aced494bbc7a6/gradle/caches/8.13/transforms/b142e6f75603c774d9881af962aaafa7/transformed/react-android-0.82.1-release/prefab/modules/reactnative/libs/android.arm64-v8a/libreactnative.so"
       ]
     },
     "react_codegen_RNImagePickerSpec::@f66ee9a2efecfb28bee4": {
@@ -58,9 +58,9 @@
       "artifactName": "react_codegen_rnscreens",
       "output": "/Users/maornelas/Code/lecrepe/lecrepe-app-v2/android/app/build/intermediates/cxx/RelWithDebInfo/2i5us3i5/obj/arm64-v8a/libreact_codegen_rnscreens.so",
       "runtimeFiles": [
-        "/Users/maornelas/.gradle/caches/8.13/transforms/b142e6f75603c774d9881af962aaafa7/transformed/react-android-0.82.1-release/prefab/modules/reactnative/libs/android.arm64-v8a/libreactnative.so",
-        "/Users/maornelas/.gradle/caches/8.13/transforms/b142e6f75603c774d9881af962aaafa7/transformed/react-android-0.82.1-release/prefab/modules/jsi/libs/android.arm64-v8a/libjsi.so",
-        "/Users/maornelas/.gradle/caches/8.13/transforms/066ab4ee048cd2b737a2cef809d0db8a/transformed/fbjni-0.7.0/prefab/modules/fbjni/libs/android.arm64-v8a/libfbjni.so"
+        "/private/var/folders/tt/79d7j_514gb5kf6gcyscq6580000gn/T/cursor-sandbox-cache/a4c31241669881e4d32aced494bbc7a6/gradle/caches/8.13/transforms/b142e6f75603c774d9881af962aaafa7/transformed/react-android-0.82.1-release/prefab/modules/reactnative/libs/android.arm64-v8a/libreactnative.so",
+        "/private/var/folders/tt/79d7j_514gb5kf6gcyscq6580000gn/T/cursor-sandbox-cache/a4c31241669881e4d32aced494bbc7a6/gradle/caches/8.13/transforms/b142e6f75603c774d9881af962aaafa7/transformed/react-android-0.82.1-release/prefab/modules/jsi/libs/android.arm64-v8a/libjsi.so",
+        "/private/var/folders/tt/79d7j_514gb5kf6gcyscq6580000gn/T/cursor-sandbox-cache/a4c31241669881e4d32aced494bbc7a6/gradle/caches/8.13/transforms/066ab4ee048cd2b737a2cef809d0db8a/transformed/fbjni-0.7.0/prefab/modules/fbjni/libs/android.arm64-v8a/libfbjni.so"
       ]
     },
     "react_codegen_rnsvg::@4f40eb209d0c0b4a3b65": {
@@ -69,9 +69,9 @@
       "artifactName": "react_codegen_rnsvg",
       "output": "/Users/maornelas/Code/lecrepe/lecrepe-app-v2/android/app/build/intermediates/cxx/RelWithDebInfo/2i5us3i5/obj/arm64-v8a/libreact_codegen_rnsvg.so",
       "runtimeFiles": [
-        "/Users/maornelas/.gradle/caches/8.13/transforms/b142e6f75603c774d9881af962aaafa7/transformed/react-android-0.82.1-release/prefab/modules/reactnative/libs/android.arm64-v8a/libreactnative.so",
-        "/Users/maornelas/.gradle/caches/8.13/transforms/b142e6f75603c774d9881af962aaafa7/transformed/react-android-0.82.1-release/prefab/modules/jsi/libs/android.arm64-v8a/libjsi.so",
-        "/Users/maornelas/.gradle/caches/8.13/transforms/066ab4ee048cd2b737a2cef809d0db8a/transformed/fbjni-0.7.0/prefab/modules/fbjni/libs/android.arm64-v8a/libfbjni.so"
+        "/private/var/folders/tt/79d7j_514gb5kf6gcyscq6580000gn/T/cursor-sandbox-cache/a4c31241669881e4d32aced494bbc7a6/gradle/caches/8.13/transforms/b142e6f75603c774d9881af962aaafa7/transformed/react-android-0.82.1-release/prefab/modules/reactnative/libs/android.arm64-v8a/libreactnative.so",
+        "/private/var/folders/tt/79d7j_514gb5kf6gcyscq6580000gn/T/cursor-sandbox-cache/a4c31241669881e4d32aced494bbc7a6/gradle/caches/8.13/transforms/b142e6f75603c774d9881af962aaafa7/transformed/react-android-0.82.1-release/prefab/modules/jsi/libs/android.arm64-v8a/libjsi.so",
+        "/private/var/folders/tt/79d7j_514gb5kf6gcyscq6580000gn/T/cursor-sandbox-cache/a4c31241669881e4d32aced494bbc7a6/gradle/caches/8.13/transforms/066ab4ee048cd2b737a2cef809d0db8a/transformed/fbjni-0.7.0/prefab/modules/fbjni/libs/android.arm64-v8a/libfbjni.so"
       ]
     },
     "react_codegen_safeareacontext::@7984cd80db47aa7b952a": {
@@ -80,9 +80,9 @@
       "artifactName": "react_codegen_safeareacontext",
       "output": "/Users/maornelas/Code/lecrepe/lecrepe-app-v2/android/app/build/intermediates/cxx/RelWithDebInfo/2i5us3i5/obj/arm64-v8a/libreact_codegen_safeareacontext.so",
       "runtimeFiles": [
-        "/Users/maornelas/.gradle/caches/8.13/transforms/066ab4ee048cd2b737a2cef809d0db8a/transformed/fbjni-0.7.0/prefab/modules/fbjni/libs/android.arm64-v8a/libfbjni.so",
-        "/Users/maornelas/.gradle/caches/8.13/transforms/b142e6f75603c774d9881af962aaafa7/transformed/react-android-0.82.1-release/prefab/modules/jsi/libs/android.arm64-v8a/libjsi.so",
-        "/Users/maornelas/.gradle/caches/8.13/transforms/b142e6f75603c774d9881af962aaafa7/transformed/react-android-0.82.1-release/prefab/modules/reactnative/libs/android.arm64-v8a/libreactnative.so"
+        "/private/var/folders/tt/79d7j_514gb5kf6gcyscq6580000gn/T/cursor-sandbox-cache/a4c31241669881e4d32aced494bbc7a6/gradle/caches/8.13/transforms/066ab4ee048cd2b737a2cef809d0db8a/transformed/fbjni-0.7.0/prefab/modules/fbjni/libs/android.arm64-v8a/libfbjni.so",
+        "/private/var/folders/tt/79d7j_514gb5kf6gcyscq6580000gn/T/cursor-sandbox-cache/a4c31241669881e4d32aced494bbc7a6/gradle/caches/8.13/transforms/b142e6f75603c774d9881af962aaafa7/transformed/react-android-0.82.1-release/prefab/modules/jsi/libs/android.arm64-v8a/libjsi.so",
+        "/private/var/folders/tt/79d7j_514gb5kf6gcyscq6580000gn/T/cursor-sandbox-cache/a4c31241669881e4d32aced494bbc7a6/gradle/caches/8.13/transforms/b142e6f75603c774d9881af962aaafa7/transformed/react-android-0.82.1-release/prefab/modules/reactnative/libs/android.arm64-v8a/libreactnative.so"
       ]
     }
   },

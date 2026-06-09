@@ -6,12 +6,13 @@ import { Order, ApiResponse } from '../types';
  */
 export class OrderLecrepeService {
   /**
-   * Get all Lecrepe orders by store
+   * Lista órdenes Lecrepe por tienda (`store_id` en query).
+   * El backend excluye status `Finalizada` cuando se envía `store_id`.
    */
   static async getAllOrdersLecrepe(storeId?: string | number): Promise<ApiResponse<Order[]>> {
     try {
       let url = `${API_BASE_URL}/order_lecrepe/get`;
-      if (storeId) {
+      if (storeId !== undefined && storeId !== null && storeId !== '') {
         url += `?store_id=${storeId}`;
       }
       const response = await fetch(url, {
@@ -28,8 +29,13 @@ export class OrderLecrepeService {
       }
 
       const data = await response.json();
+      const ordersList = Array.isArray(data)
+        ? data
+        : Array.isArray((data as any)?.orders)
+          ? (data as any).orders
+          : [];
       return {
-        data: Array.isArray(data) ? data : [],
+        data: ordersList,
         success: true,
       };
     } catch (error: any) {

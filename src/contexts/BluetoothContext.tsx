@@ -9,26 +9,28 @@ const { LecrepeBluetooth } = NativeModules;
 
 // Importación del módulo de Bluetooth usando require para compatibilidad con release
 let RNBluetoothClassic: any = null;
+let bluetoothModuleLoadAttempted = false;
 
 // Función helper para obtener el módulo de Bluetooth de forma segura
 const getBluetoothModule = () => {
-  if (RNBluetoothClassic === null) {
+  if (RNBluetoothClassic === null && !bluetoothModuleLoadAttempted) {
+    bluetoothModuleLoadAttempted = true;
     try {
+      // Usar require de forma más segura
       const bluetoothModule = require('react-native-bluetooth-classic');
       RNBluetoothClassic = bluetoothModule.default || bluetoothModule;
       
       // Verificar que el módulo se cargó correctamente
-      if (!RNBluetoothClassic) {
+      if (!RNBluetoothClassic || typeof RNBluetoothClassic.isBluetoothEnabled !== 'function') {
         throw new Error('El módulo de Bluetooth no se pudo cargar correctamente');
       }
     } catch (error: any) {
-      console.error('Failed to load Bluetooth module:', error);
+      console.warn('Failed to load Bluetooth module (non-critical):', error?.message || error);
       // Retornar un objeto mock para evitar crashes
       RNBluetoothClassic = {
-        isBluetoothEnabled: async () => {
-          throw new Error('Bluetooth no está disponible en este dispositivo');
-        },
-        getBondedDevices: async () => {
+        isBluetoothEnabled: async () => false,
+        getBondedDevices: async () => [],
+        connectToDevice: async () => {
           throw new Error('Bluetooth no está disponible en este dispositivo');
         },
       };

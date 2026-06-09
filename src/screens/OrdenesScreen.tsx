@@ -54,10 +54,7 @@ const OrdenesScreen: React.FC<OrdenesScreenProps> = ({ navigation }) => {
 
       const response = await OrderLecrepeService.getAllOrdersLecrepe(parseInt(idStore));
       if (response.data) {
-        // Filter only "to go" orders and exclude "Finalizadas"
-        const togoOrders = response.data.filter(
-          (order: Order) => order.togo === true && order.status !== 'Finalizada'
-        );
+        const togoOrders = response.data.filter((order: Order) => order.togo === true);
         setOrders(togoOrders);
       }
     } catch (error: any) {
@@ -139,9 +136,17 @@ const OrdenesScreen: React.FC<OrdenesScreenProps> = ({ navigation }) => {
     }
   };
 
-  const handleOrderClick = (order: Order) => {
-    setSelectedOrder(order);
-    setOrderDetailOpen(true);
+  const handleOrderClick = async (order: Order) => {
+    const orderId = order.id_order ?? (order as any)._id;
+    try {
+      const response = await OrderLecrepeService.getOrderLecrepeById(orderId);
+      const freshOrder = response?.data ?? order;
+      setSelectedOrder(freshOrder);
+      setOrderDetailOpen(true);
+    } catch (_e) {
+      setSelectedOrder(order);
+      setOrderDetailOpen(true);
+    }
   };
 
   const handleNewOrder = () => {

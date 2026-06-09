@@ -42,6 +42,17 @@ if(NOT DEFINED CMAKE_OBJDUMP)
   set(CMAKE_OBJDUMP "/Users/maornelas/Library/Android/sdk/ndk/27.1.12297006/toolchains/llvm/prebuilt/darwin-x86_64/bin/llvm-objdump")
 endif()
 
+if(NOT CMAKE_INSTALL_LOCAL_ONLY)
+  # Include the install script for each subdirectory.
+  include("/Users/maornelas/Code/lecrepe/lecrepe-app-v2/android/app/.cxx/Debug/14161a3u/x86_64/rnasyncstorage_autolinked_build/cmake_install.cmake")
+  include("/Users/maornelas/Code/lecrepe/lecrepe-app-v2/android/app/.cxx/Debug/14161a3u/x86_64/rngesturehandler_codegen_autolinked_build/cmake_install.cmake")
+  include("/Users/maornelas/Code/lecrepe/lecrepe-app-v2/android/app/.cxx/Debug/14161a3u/x86_64/RNImagePickerSpec_autolinked_build/cmake_install.cmake")
+  include("/Users/maornelas/Code/lecrepe/lecrepe-app-v2/android/app/.cxx/Debug/14161a3u/x86_64/safeareacontext_autolinked_build/cmake_install.cmake")
+  include("/Users/maornelas/Code/lecrepe/lecrepe-app-v2/android/app/.cxx/Debug/14161a3u/x86_64/rnscreens_autolinked_build/cmake_install.cmake")
+  include("/Users/maornelas/Code/lecrepe/lecrepe-app-v2/android/app/.cxx/Debug/14161a3u/x86_64/rnsvg_autolinked_build/cmake_install.cmake")
+
+endif()
+
 if(CMAKE_INSTALL_COMPONENT)
   set(CMAKE_INSTALL_MANIFEST "install_manifest_${CMAKE_INSTALL_COMPONENT}.txt")
 else()

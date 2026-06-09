@@ -19,6 +19,7 @@ import { StorageService } from '../services/storageService';
 import { useBluetooth } from '../contexts/BluetoothContext';
 import { Order } from '../types';
 import { useToast } from '../hooks/useToast';
+import { SALTY_CREPE_EXTRA_INGREDIENT_PRICE, SALTY_CREPE_MUSHROOM_PRICE } from '../config/constants';
 
 // Declaración de tipos para TextEncoder (disponible en React Native)
 declare const TextEncoder: {
@@ -72,13 +73,11 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({ navigation }) => {
 
       const response = await OrderLecrepeService.getAllOrdersLecrepe(parseInt(idStore));
       if (response.data) {
-        // Excluir órdenes "Finalizadas" (igual que kokoro-front)
-        const filteredOrders = response.data.filter((order: Order) => order.status !== 'Finalizada');
-        setOrders(filteredOrders);
+        setOrders(response.data);
       }
     } catch (error: any) {
-      console.error('Error loading orders:', error);
       if (!silent) {
+        console.error('Error loading orders:', error);
         showError('No se pudieron cargar las órdenes');
       }
     } finally {
@@ -95,21 +94,21 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({ navigation }) => {
   };
 
   const getPendingOrders = () => {
-    return orders.filter((order) => order.status === 'Pendiente' && order.status !== 'Finalizada');
+    return orders.filter((order) => order.status === 'Pendiente');
   };
 
   const getReadyOrders = () => {
-    return orders.filter((order) => order.status === 'Lista' && order.status !== 'Finalizada');
+    return orders.filter((order) => order.status === 'Lista');
   };
 
   const getClosedOrders = () => {
     return orders.filter(
-      (order) => (order.status === 'Cerrada' || order.status === 'Entregada') && order.status !== 'Finalizada'
+      (order) => order.status === 'Cerrada' || order.status === 'Entregada'
     );
   };
 
   const getCanceledOrders = () => {
-    return orders.filter((order) => order.status === 'Cancelada' && order.status !== 'Finalizada');
+    return orders.filter((order) => order.status === 'Cancelada');
   };
 
   const handleCloseDay = async () => {
@@ -146,11 +145,8 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({ navigation }) => {
                 }
               }
 
-              // Filtrar órdenes que NO están finalizadas (para validar que todas estén cerradas)
-              const nonFinalizedOrders = allOrders.filter(order => order.status !== 'Finalizada');
-
-              // Verificar que todas las órdenes (excepto las finalizadas) estén cerradas
-              const nonClosedOrders = nonFinalizedOrders.filter(order => 
+              // API por tienda no devuelve Finalizada; validar que no queden abiertas
+              const nonClosedOrders = allOrders.filter(order => 
                 order.status !== 'Cerrada' && order.status !== 'Entregada'
               );
 
@@ -173,12 +169,9 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({ navigation }) => {
                 return;
               }
 
-              // Filtrar órdenes cerradas (igual que kokoro-front)
-              const ordersToFinalize = allOrders.filter(order => {
-                const isClosedOrDelivered = order.status === 'Cerrada' || order.status === 'Entregada';
-                const notFinalized = order.status !== 'Finalizada';
-                return isClosedOrDelivered && notFinalized;
-              });
+              const ordersToFinalize = allOrders.filter(order =>
+                order.status === 'Cerrada' || order.status === 'Entregada'
+              );
 
               if (ordersToFinalize.length === 0) {
                 showError('No hay órdenes cerradas para finalizar');
@@ -257,21 +250,15 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({ navigation }) => {
         }
       }
 
-      // Filtrar órdenes (todas las que se muestran en la app: cerradas, pendientes, listas, entregadas, pero no finalizadas)
-      // No filtrar por fecha para incluir todas las órdenes visibles, similar a cómo se muestran en la pantalla
       const dayOrders = allOrders.filter(order => {
-        // Verificar que la orden tenga productos/items
         const hasProducts = (order.products && order.products.length > 0) || (order.items && order.items.length > 0);
         if (!hasProducts) return false;
-        
-        // Verificar estado (igual que getClosedOrders, getPendingOrders, etc.)
-        const validStatus = (order.status === 'Cerrada' || 
-                            order.status === 'Entregada' || 
-                            order.status === 'Pendiente' || 
-                            order.status === 'Lista') &&
-                           order.status !== 'Finalizada';
-        
-        return validStatus;
+        return (
+          order.status === 'Cerrada' ||
+          order.status === 'Entregada' ||
+          order.status === 'Pendiente' ||
+          order.status === 'Lista'
+        );
       });
 
       console.log('Total órdenes obtenidas:', allOrders.length);
@@ -462,21 +449,40 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({ navigation }) => {
     }
   };
 
-  const handleMarkAsReady = async (orderId: number) => {
+  const handleMarkAsReady = async (orderIdOrMongoId: number | string, order?: Order) => {
     try {
-      await OrderLecrepeService.markOrderAsReady(orderId);
+      // Enviar _id de MongoDB cuando exista para actualizar la orden exacta (útil cuando hay varias con el mismo id_order)
+      await OrderLecrepeService.markOrderAsReady(orderIdOrMongoId);
       showSuccess('Orden marcada como lista');
-      loadOrders();
+      const mongoId = order && (order as any)._id;
+      setOrders((prev) =>
+        prev.map((o) => {
+          const match =
+            String((o as any).id_order) === String(orderIdOrMongoId) ||
+            String(o.id_order) === String(orderIdOrMongoId) ||
+            (mongoId && String((o as any)._id) === String(mongoId));
+          return match ? { ...o, status: 'Lista' } : o;
+        })
+      );
     } catch (error: any) {
       showError('No se pudo marcar la orden como lista');
     }
   };
 
-  const handleMarkAsDelivered = async (orderId: number) => {
+  const handleMarkAsDelivered = async (orderIdOrMongoId: number | string, order?: Order) => {
     try {
-      await OrderLecrepeService.markOrderAsDelivered(orderId);
+      await OrderLecrepeService.markOrderAsDelivered(orderIdOrMongoId);
       showSuccess('Orden marcada como entregada');
-      loadOrders();
+      const mongoId = order && (order as any)._id;
+      setOrders((prev) =>
+        prev.map((o) => {
+          const match =
+            String((o as any).id_order) === String(orderIdOrMongoId) ||
+            String(o.id_order) === String(orderIdOrMongoId) ||
+            (mongoId && String((o as any)._id) === String(mongoId));
+          return match ? { ...o, status: 'Cerrada' } : o;
+        })
+      );
     } catch (error: any) {
       showError('No se pudo marcar la orden como entregada');
     }
@@ -592,6 +598,15 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({ navigation }) => {
           .replace(/[úÚ]/g, 'U');
       };
 
+      // Función para abreviar palabras en el ticket
+      const abbreviateTicketText = (str: string): string => {
+        return str
+          .replace(/\bcon Perlas\b/gi, 'c/Perl')
+          .replace(/\bPerlas\b/gi, 'Perl')
+          .replace(/\bGrande\b/gi, 'G')
+          .replace(/\bChico\b/gi, 'Ch');
+      };
+
       // Comandos ESC/POS
       const ESC = '\x1B';
       const centerText = ESC + 'a' + '\x01';
@@ -645,13 +660,39 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({ navigation }) => {
             productDesc += ` ${removeAccents(item.size)}`;
           }
           
-          // Agregar ingredientes excluidos si existen (desde toppings)
+          // Agregar "con Perlas" si el item tiene perlas y no está ya en el nombre
+          // Verificar si el nombre incluye "con perlas" (case insensitive)
+          const hasPearlsInName = productDesc.toLowerCase().includes('con perlas');
+          // Verificar si hay algún indicador de perlas en el item
+          const hasPearls = item.withPearls === true || 
+                           (item.name && item.name.toLowerCase().includes('con perlas')) ||
+                           (item.product_name && item.product_name.toLowerCase().includes('con perlas')) ||
+                           (item.comments && item.comments.toLowerCase().includes('perlas'));
+          
+          if (hasPearls && !hasPearlsInName) {
+            productDesc += ' con Perlas';
+          }
+          
+          // TRANSFORME: solo "con:" (ingredientes elegidos). Chocolatosa/otras crepas: "con:" con fruta/adicionales
+          const additionalToppingsForDesc = item.toppings && Array.isArray(item.toppings)
+            ? item.toppings.filter((t: any) => t.additional === true)
+            : [];
           if (item.toppings && Array.isArray(item.toppings)) {
-            const excludedToppings = item.toppings.filter((t: any) => t.selected === false);
-            if (excludedToppings.length > 0) {
-              productDesc += ` (sin ${excludedToppings.map((t: any) => removeAccents(t.name)).join(', ')})`;
+            const itemNameLower = (item.name || item.product_name || '').toLowerCase();
+            const isTransformer = itemNameLower.includes('transform');
+            if (isTransformer) {
+              const conToppings = item.toppings.filter((t: any) => t.selected === true && t.additional !== true);
+              if (conToppings.length > 0) {
+                productDesc += ` (con ${conToppings.map((t: any) => removeAccents(t.name)).join(', ')})`;
+              }
+            } else if (additionalToppingsForDesc.length > 0) {
+              // Chocolatosa u otra crepa con fruta/ingrediente adicional: mostrar en la línea principal
+              productDesc += ` (con ${additionalToppingsForDesc.map((t: any) => removeAccents(t.name || '')).join(', ')})`;
             }
           }
+
+          // Abreviar palabras para que quepan en una línea
+          productDesc = abbreviateTicketText(productDesc);
           
           const descripcion = productDesc.substring(0, anchoDescripcion).padEnd(anchoDescripcion);
           // El type_price del backend ya incluye el fee_togo si es para llevar
@@ -659,6 +700,26 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({ navigation }) => {
           const itemTotalPrice = itemPrice * (item.units || 0);
           const precio = `$${itemTotalPrice.toFixed(2)}`.padStart(anchoPrecio);
           salida += `${cantidad} ${descripcion}${precio}${lineFeed}`; // Espacio entre cantidad y descripción
+          
+          // Solo mostrar cobros adicionales: para llevar $10, con champiñones $10, + ingrediente $5
+          const isItemTakeout = item.item_togo === true || 
+                               (item.comments && item.comments.toLowerCase().includes('para llevar') && !selectedOrder?.togo);
+          if (!selectedOrder?.togo && isItemTakeout) {
+            salida += `     para llevar $${TOGO_PRICE}${lineFeed}`;
+          }
+
+          const additionalToppings = item.toppings && Array.isArray(item.toppings)
+            ? item.toppings.filter((t: any) => t.additional === true)
+            : [];
+          // Ingredientes adicionales: solo nombre, sin precio en el ticket
+          if (category === 'crepas' && additionalToppings.length > 0) {
+            additionalToppings.forEach((t: any) => {
+              const name = (t.name || '').toLowerCase().trim();
+              const isMushroom = name.includes('champiñón') || name.includes('champinon') || name.includes('champiñones') || name.includes('champinones');
+              const label = isMushroom ? 'con champiñones' : `+ ${removeAccents(t.name || 'ingred.')}`;
+              salida += `     ${label}${lineFeed}`;
+            });
+          }
 
           // Calcular total del producto (el precio ya incluye fee_togo si aplica)
           total += itemTotalPrice;
@@ -692,6 +753,7 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({ navigation }) => {
       const totalLabel = 'TOTAL A PAGAR:';
       
       const doubleSizeBold = ESC + '!' + '\x38'; // Doble tamaño y negritas
+      const boldText = ESC + '!' + '\x08'; // Texto en negritas
       const ticketContent = resetFormat + smallSize + // Tamaño pequeño
         (logoEscPos ? logoEscPos + lineFeed : '') + // Logo en la parte superior
         centerText + doubleSizeBold + removeAccents('LECREPE') + smallSize + lineFeed + // Texto LECREPE grande
@@ -699,8 +761,7 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({ navigation }) => {
         removeAccents('Tel: 432-100-4990') + lineFeed +
         leftAlign + separator + lineFeed +
         `Fecha: ${fecha}  Hora: ${hora}` + lineFeed +
-        `Orden No: ${selectedOrder.id_order || 0}` + lineFeed +
-        mesaText + lineFeed +
+        (selectedOrder.togo ? centerText + boldText + removeAccents('*** PARA LLEVAR ***') + smallSize + lineFeed : mesaText + lineFeed) +
         orderNameLine + separator + lineFeed +
         headerLine + separator + lineFeed +
         salida + separator + lineFeed +
@@ -941,7 +1002,7 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({ navigation }) => {
                         style={[styles.actionButton, styles.actionButtonLista]}
                         onPress={(e) => {
                           e.stopPropagation();
-                          handleMarkAsReady(order.id_order);
+                          handleMarkAsReady((order as any)._id || order.id_order, order);
                         }}
                       >
                         <Text style={styles.actionButtonText}>LISTA</Text>
@@ -952,7 +1013,7 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({ navigation }) => {
                         style={[styles.actionButton, styles.actionButtonCerrar]}
                         onPress={(e) => {
                           e.stopPropagation();
-                          handleMarkAsDelivered(order.id_order);
+                          handleMarkAsDelivered((order as any)._id || order.id_order, order);
                         }}
                       >
                         <Text style={styles.actionButtonText}>CERRAR</Text>
@@ -1169,23 +1230,13 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({ navigation }) => {
                       return crepes.map((item: any, index: number) => {
                         const itemName = item.name || item.product_name || 'Sin nombre';
                         const itemUnits = item.units || 0;
-                        // Obtener ingredientes esenciales excluidos (selected === false)
-                        const excludedToppings = item.toppings && Array.isArray(item.toppings) 
-                          ? item.toppings.filter((t: any) => t.selected === false)
-                          : [];
-                        // Obtener ingredientes adicionales (marcados con additional: true o selected: true sin marca)
-                        // Solo mostrar ingredientes adicionales, NO los ingredientes esenciales seleccionados
-                        const additionalToppings = item.toppings && Array.isArray(item.toppings)
-                          ? item.toppings.filter((t: any) => {
-                              // Si tiene marca additional: true, es adicional
-                              if (t.additional === true) return true;
-                              // Si tiene selected: true pero no tiene marca additional, también es adicional
-                              // (porque los ingredientes esenciales seleccionados ya no se guardan como toppings)
-                              if (t.selected === true && t.selected !== false) return true;
-                              return false;
-                            })
-                          : [];
-                        const additionalIngredients = additionalToppings.map((t: any) => t.name);
+                        const itemNameLower = (itemName || '').toLowerCase();
+                        const isTransformer = itemNameLower.includes('transform');
+                        const toppings = item.toppings && Array.isArray(item.toppings) ? item.toppings : [];
+                        const excludedToppings = isTransformer ? [] : toppings.filter((t: any) => t.selected === false);
+                        const selectedTransformerToppings = isTransformer ? toppings.filter((t: any) => t.selected === true && t.additional !== true) : [];
+                        const additionalToppings = isTransformer ? [] : toppings.filter((t: any) => t.additional === true || (t.selected === true && t.additional !== false));
+                        const conIngredients = isTransformer ? selectedTransformerToppings.map((t: any) => t.name) : additionalToppings.map((t: any) => t.name);
                         
                         // Verificar si el item es "para llevar" individualmente (en órdenes de mesa)
                         const isItemTakeout = item.item_togo === true || 
@@ -1203,14 +1254,14 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({ navigation }) => {
                                   <Text style={styles.productQuantityBadge}>{itemUnits}</Text>
                                   <Text style={styles.productListItemName}>{itemName}</Text>
                                 </View>
-                                {excludedToppings.length > 0 && (
+                                {!isTransformer && excludedToppings.length > 0 && (
                                   <Text style={styles.toppingsText}>
                                     sin: {excludedToppings.map((t: any) => t.name).join(', ')}
                                   </Text>
                                 )}
-                                {additionalIngredients.length > 0 && (
+                                {conIngredients.length > 0 && (
                                   <Text style={styles.additionalIngredientsText}>
-                                    con: {additionalIngredients.join(', ')}
+                                    con: {conIngredients.join(', ')}
                                   </Text>
                                 )}
                                 {isItemTakeout && (

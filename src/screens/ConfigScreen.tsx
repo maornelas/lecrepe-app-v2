@@ -12,9 +12,9 @@ import {
   Platform,
   PermissionsAndroid,
 } from 'react-native';
-import NetInfo from '@react-native-community/netinfo';
 import { StorageService } from '../services/storageService';
 import { useBluetooth } from '../contexts/BluetoothContext';
+import { APP_VERSION, APP_CHANGELOG } from '../config/constants';
 import type { BluetoothDevice } from '../services/lecrepeBluetoothService';
 
 interface ConfigScreenProps {
@@ -23,7 +23,6 @@ interface ConfigScreenProps {
 
 const ConfigScreen: React.FC<ConfigScreenProps> = ({ navigation }) => {
   const [isPrinting, setIsPrinting] = useState(false);
-  const [localIP, setLocalIP] = useState('Obteniendo...');
   
   // Usar contexto de Bluetooth (persistente entre pantallas)
   const {
@@ -45,7 +44,6 @@ const ConfigScreen: React.FC<ConfigScreenProps> = ({ navigation }) => {
     // Forzar Bluetooth siempre activado
     setUseBluetooth(true);
     loadSavedSettings();
-    getLocalIP();
     // Verificar disponibilidad de Bluetooth al cargar la pantalla
     if (checkBluetooth) {
       checkBluetooth().catch(err => {
@@ -61,19 +59,6 @@ const ConfigScreen: React.FC<ConfigScreenProps> = ({ navigation }) => {
       await StorageService.setItem('useBluetooth', 'true');
     } catch (error) {
       console.error('Error loading saved settings:', error);
-    }
-  };
-
-  const getLocalIP = async () => {
-    try {
-      const state = await NetInfo.fetch();
-      if (state.details && 'ipAddress' in state.details && typeof state.details.ipAddress === 'string') {
-        setLocalIP(state.details.ipAddress || 'No disponible');
-      } else {
-        setLocalIP('No disponible');
-      }
-    } catch (error) {
-      setLocalIP('Error al obtener IP');
     }
   };
 
@@ -282,18 +267,15 @@ const ConfigScreen: React.FC<ConfigScreenProps> = ({ navigation }) => {
         </View>
 
         <View style={styles.settingsSection}>
-          <Text style={styles.settingsSectionTitle}>Información del Dispositivo</Text>
-          <View style={styles.infoCard}>
-            <Text style={styles.infoLabel}>IP Local del Dispositivo</Text>
-            <Text style={styles.infoValue}>{localIP}</Text>
-          </View>
-        </View>
-
-        <View style={styles.settingsSection}>
           <Text style={styles.settingsSectionTitle}>Acerca de</Text>
           <View style={styles.infoCard}>
             <Text style={styles.infoLabel}>Versión</Text>
-            <Text style={styles.infoValue}>1.0.0</Text>
+            <Text style={styles.infoValue}>{APP_VERSION}</Text>
+          </View>
+          <View style={styles.changelogCard}>
+            <Text style={styles.changelogCardTitle}>Historial de cambios</Text>
+            <Text style={styles.changelogVersion}>Versión {APP_VERSION} - {APP_CHANGELOG}</Text>
+            <Text style={styles.changelogDate}>Fecha: {new Date().toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' })}</Text>
           </View>
         </View>
 
@@ -384,6 +366,28 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#333',
+  },
+  changelogCard: {
+    backgroundColor: '#f9f9f9',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 0,
+  },
+  changelogCardTitle: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 8,
+    fontWeight: '600',
+  },
+  changelogVersion: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 6,
+  },
+  changelogDate: {
+    fontSize: 12,
+    color: '#888',
   },
   testPrintButton: {
     backgroundColor: '#4CAF50',

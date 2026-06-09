@@ -78,10 +78,8 @@ const VentasScreen: React.FC<VentasScreenProps> = ({ navigation }) => {
       console.log('📊 Total órdenes recibidas:', allOrders.length);
       console.log('📊 Estados de órdenes:', allOrders.map(o => o.status));
       
-      // Filtrar órdenes cerradas (excluyendo las Finalizadas)
       const closed = allOrders.filter(order => 
-        (order.status === 'Cerrada' || order.status === 'Entregada') && 
-        order.status !== 'Finalizada'
+        order.status === 'Cerrada' || order.status === 'Entregada'
       );
       
       console.log('📊 Órdenes cerradas encontradas:', closed.length);
@@ -157,11 +155,10 @@ const VentasScreen: React.FC<VentasScreenProps> = ({ navigation }) => {
         if (!hasProducts) return false;
         
         // Verificar estado (igual que getClosedOrders, getPendingOrders, etc.)
-        const validStatus = (order.status === 'Cerrada' || 
+        const validStatus = order.status === 'Cerrada' || 
                             order.status === 'Entregada' || 
                             order.status === 'Pendiente' || 
-                            order.status === 'Lista') &&
-                           order.status !== 'Finalizada';
+                            order.status === 'Lista';
         
         return validStatus;
       });
@@ -465,11 +462,7 @@ const VentasScreen: React.FC<VentasScreenProps> = ({ navigation }) => {
                 }
               }
 
-              // Filtrar órdenes que NO están finalizadas (para validar que todas estén cerradas)
-              const nonFinalizedOrders = allOrders.filter(order => order.status !== 'Finalizada');
-
-              // Verificar que todas las órdenes (excepto las finalizadas) estén cerradas
-              const nonClosedOrders = nonFinalizedOrders.filter(order => 
+              const nonClosedOrders = allOrders.filter(order => 
                 order.status !== 'Cerrada' && order.status !== 'Entregada'
               );
 
@@ -492,14 +485,9 @@ const VentasScreen: React.FC<VentasScreenProps> = ({ navigation }) => {
                 return;
               }
 
-              // Filtrar órdenes cerradas del día (igual que kokoro-front: solo las que están Cerradas o Entregadas)
-              // No importa la fecha, solo el estado - todas las órdenes cerradas se finalizan
-              const ordersToFinalize = allOrders.filter(order => {
-                const isClosedOrDelivered = order.status === 'Cerrada' || order.status === 'Entregada';
-                const notFinalized = order.status !== 'Finalizada';
-                
-                return isClosedOrDelivered && notFinalized;
-              });
+              const ordersToFinalize = allOrders.filter(order =>
+                order.status === 'Cerrada' || order.status === 'Entregada'
+              );
 
               if (ordersToFinalize.length === 0) {
                 Alert.alert('Info', 'No hay órdenes cerradas para finalizar');

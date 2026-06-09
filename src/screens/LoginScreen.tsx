@@ -198,10 +198,10 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation, onLoginSuccess })
               
               <View style={styles.footerCopyright}>
                 <Text style={styles.copyrightText}>
-                  ® Derechos Reservados - Le Crépe 2025
+                  ® Derechos Reservados - Le Crépe 2026
                 </Text>
                 <Text style={styles.versionText}>
-                  Versión 0.11 Changes to responsive design
+                  Versión 0.5 Changes to tickets
                 </Text>
               </View>
             </View>
